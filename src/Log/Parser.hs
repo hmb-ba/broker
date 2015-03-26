@@ -1,26 +1,9 @@
 module Log.Parser
 ( parseLog ) where
 
-import Data.Word
+import Log.Types
 import Data.Binary.Get
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString as BS
-
-data Payload = Payload
-  { keylen      :: !Word32
-  --todo: key
-  , payloadLen  :: !Word32
-  , payloadData :: BS.ByteString
-  } deriving (Show)
-
-data LogEntry = LogEntry
-  { offset  :: !Word64
-  , len     :: !Word32
-  , crc     :: !Word32
-  , magic   :: !Word8
-  , attr    :: !Word8
-  , payload :: Payload
-  } deriving (Show)
 
 entryParser :: Get LogEntry
 entryParser = do
@@ -39,7 +22,7 @@ payloadParser = do
   payload <- getByteString $ fromIntegral paylen
   return $! Payload keylen paylen payload
 
-getEntries :: Get [LogEntry]
+getEntries :: Get Log
 getEntries = do
   empty <- isEmpty
   if empty
@@ -48,9 +31,8 @@ getEntries = do
               entries <- getEntries
               return (entry:entries)
 
-parseLog :: String -> IO [LogEntry]
+parseLog :: String -> IO Log
 parseLog a = do
   input <- BL.readFile a
-  let t = runGet getEntries input
-  return t
+  return (runGet getEntries input)
 
