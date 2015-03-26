@@ -2,6 +2,14 @@ module Log.Types
 ( LogEntry (..)
 , Payload (..)
 , Log
+, PayloadData
+, Offset
+, Length
+, Crc
+, Magic
+, Attribute
+, KeyLength
+, PayloadLength
 ) where
 
 import Data.Word
