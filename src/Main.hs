@@ -10,5 +10,5 @@ main = do
   file <- getArgs
   log <- parseLog $ head file
   print log
-  writeLogEntry "myfile" 0 $ head log
+  writeLog "myfile" 0 0 log
   putStrLn "done"

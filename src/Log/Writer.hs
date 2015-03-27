@@ -1,5 +1,5 @@
 module Log.Writer
-( writeLogEntry ) where
+( writeLog ) where
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
@@ -17,15 +17,30 @@ isPartition p = True
 logFolder :: Topic -> Partition -> String
 logFolder t p = t ++ "_" ++ show p
 
-logFile :: Offset -> String
+logFile :: (Integral i) => i -> String
 logFile o = (show $ fromIntegral o) ++ ".log"
 
 getPath :: String -> String -> String
-getPath folder file = folder ++ file
+getPath folder file = folder ++ "/" ++ file
 
-writeLogEntry :: String -> Int -> LogEntry -> IO ()
-writeLogEntry topic partition logEntry = do
-  let path = getPath (logFolder topic partition) (logFile $ offset logEntry)
-  BS.writeFile path $ payloadData $ payload logEntry
+buildLogEntry :: LogEntry -> BL.ByteString
+buildLogEntry e = runPut $ do 
+  putWord64be $ offset e
+  putWord32be $ len e
+  putWord32be $ crc e
+  putWord8    $ magic e
+  putWord8    $ attr e
+  putWord32be $ keylen $ payload e
+  putWord32be $ payloadLen $ payload e
+  putByteString $ payloadData $ payload e
 
---writeLog :: Put Log
+buildLog :: Log -> BL.ByteString
+buildLog [] = BL.empty
+buildLog (x:xs) = 
+  BL.append (buildLogEntry x) (buildLog xs)
+
+writeLog :: Topic -> Partition -> Int -> Log -> IO ()
+writeLog topic partition fileOffset log = do
+  let path = getPath (logFolder topic partition) (logFile fileOffset)
+  BL.writeFile path $ buildLog log
+
