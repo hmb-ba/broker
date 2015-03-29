@@ -1,70 +1,27 @@
-import Data.Word 
+module Protocol.Parser
+(parseData) where 
+
+import Protocol.Types
 import Data.Binary.Get 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 
-data RequestMessage = RequestMessage 
-  { requestSize     :: !Word32
-  , apiKey :: !Word16
-  , apiVersion :: !Word16
-  , correlationId :: !Word32
-  , clientIdLen :: !Word16
-  , clientId :: BS.ByteString
-  , request :: Request 
-  } deriving (Show)
-
-data Request = Request ProduceRequest deriving (Show)
-
-data ProduceRequest = ProduceRequest
-  { requiredAcks :: !Word16
-  , timeout :: !Word32 
-  , topics :: [Topic]
-  } deriving (Show)
-
-data Topic = Topic 
-  { topicLen :: !Word16
-  , topicName :: BS.ByteString
-  , numPartitions :: !Word32
-  , partitions :: [Partition]
-  } deriving (Show)
-
-data Partition = Partition 
-  { partition :: !Word32
-  , messageSetSize :: !Word32
-  , messageSet :: MessageSet
-} deriving (Show)
-
-data MessageSet = MessageSet 
-  { offset :: !Word64
-  , messageSize :: !Word32
-  , message :: Message 
-  } deriving (Show) 
-
-data Message = Message 
-  { crc :: !Word32
-  , magicByte :: !Word8
-  , attributes :: !Word8
-  , key :: !Word32
-  --,  :: !Word16
-  --, key :: BS.ByteString
-  , value :: BS.ByteString
-  } deriving (Show)
 
 messageParser :: Get Message 
 messageParser = do 
   crc <- getWord32be
-  magicByte <- getWord8
+  magic <- getWord8
   attributes <- getWord8 
   key <- getWord32be 
-  valueLen <- getWord32be 
-  value <- getByteString $ fromIntegral valueLen
-  return $! Message crc magicByte attributes key value
+  payloadLen <- getWord32be 
+  payloadData <- getByteString $ fromIntegral payloadLen
+  return $! Message crc magic attributes key payloadData
 
 messageSetParser :: Get MessageSet 
 messageSetParser = do 
   offset <- getWord64be
-  messageSize <- getWord32be 
+  length <- getWord32be 
   message <- messageParser
-  return $! MessageSet offset messageSize message
+  return $! MessageSet offset length message
 
 partitionParser :: Get Partition
 partitionParser = do 
@@ -87,7 +44,7 @@ topicsParser = do
   topicName <- getByteString $ fromIntegral topicLen
   numPartitions <- getWord32be
   partitions <- getPartitions $ fromIntegral numPartitions
-  return $! Topic topicLen topicName numPartitions partitions
+  return $! Topic topicName partitions
 
 getTopics :: Int -> Get [Topic]
 getTopics i = do 
@@ -118,10 +75,15 @@ requestMessageParser = do
   request <- produceRequestParser
    -- else 
    --   request <- getRemainingLazyByteStringa
-  return $! RequestMessage requestSize apiKey apiVersion correlationId clientIdLen clientId $ Request request
+  return $! RequestMessage requestSize apiKey apiVersion correlationId    clientId $ Request request
 
-main :: IO()
-main = do 
-  input <- BL.readFile "payload"
-  let t = runGet requestMessageParser input
-  print t
+parseData :: String -> IO RequestMessage
+parseData a = do 
+  input <- BL.readFile a 
+  return (runGet requestMessageParser input)
+  
+--main:: IO()
+--main = do 
+--  input <- BL.readFile "payload"
+--  let t = runGet requestMessageParser input
+--  print t
