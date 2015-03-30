@@ -1,36 +1,12 @@
 module Protocol.Parser
 (parseData) where 
 
+import Common.Types
+import Common.Parser
 import Protocol.Types
 import Data.Binary.Get 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 
-
-messageParser :: Get Message 
-messageParser = do 
-  crc <- getWord32be
-  magic <- getWord8
-  attributes <- getWord8 
-  key <- getWord32be 
-  payloadLen <- getWord32be 
-  payloadData <- getByteString $ fromIntegral payloadLen
-  return $! Message crc magic attributes key payloadLen payloadData
-
-messageSetParser :: Get MessageSet 
-messageSetParser = do 
-  offset <- getWord64be
-  len <- getWord32be 
-  message <- messageParser
-  return $! MessageSet offset len message
-
-getMessageSets :: Get [MessageSet]
-getMessageSets = do 
-    empty <- isEmpty
-    if empty 
-    then return []
-    else do messageSet <- messageSetParser
-            messageSets <- getMessageSets
-            return (messageSet : messageSets)
 
 partitionParser :: Get Partition
 partitionParser = do 
@@ -91,9 +67,4 @@ parseData :: String -> IO RequestMessage
 parseData a = do 
   input <- BL.readFile a 
   return (runGet requestMessageParser input)
-  
---main:: IO()
---main = do 
---  input <- BL.readFile "payload"
---  let t = runGet requestMessageParser input
---  print t
+

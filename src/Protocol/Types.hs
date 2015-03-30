@@ -16,21 +16,11 @@ module Protocol.Types
 , NumPartitions
 , Partition (..)
 , PartitionNumber
-, MessageSet (..)
-, MessageSetSize
-, Message (..)
-, Offset
-, Crc
-, Len
-, Magic
-, Attributes
-, Key
-, PayloadLen
-, PayloadData 
 )where 
 
 import Data.Word
 import qualified Data.ByteString as BS
+import Common.Types
 
 type RequestSize = Word32
 type ApiKey = Word16 
@@ -86,32 +76,5 @@ data Partition = Partition
 
 type Offset = Word64
 type Len = Word32
-
-data MessageSet = MessageSet 
-  { offset :: !Offset
-  , len :: !Len
-  , message :: Message 
-} deriving (Show) 
-
-type Crc = Word32
-type Magic = Word8
-type Attributes = Word8 
-type Key = Word32 
-type PayloadLen =  Word32
-type PayloadData = BS.ByteString
-
-data Message = Message 
-  { crc :: !Crc
-  , magic :: !Magic
-  , attributes :: !Attributes
-  , key :: !Key
-  --,  :: !Word16
-  --, key :: BS.ByteString
-  , payloadLen :: !PayloadLen
-  , payloadData :: !PayloadData
-  } deriving (Show)
-
-
-
 
 

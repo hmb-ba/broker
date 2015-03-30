@@ -3,6 +3,8 @@ module Log.Writer
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
+import Common.Types
+import Common.Writer
 import Log.Types
 
 type Topic = String
@@ -23,21 +25,10 @@ logFile o = (show $ fromIntegral o) ++ ".log"
 getPath :: String -> String -> String
 getPath folder file = folder ++ "/" ++ file
 
-buildLogEntry :: LogEntry -> BL.ByteString
-buildLogEntry e = runPut $ do 
-  putWord64be $ offset e
-  putWord32be $ len e
-  putWord32be $ crc e
-  putWord8    $ magic e
-  putWord8    $ attr e
-  putWord32be $ keylen $ payload e
-  putWord32be $ payloadLen $ payload e
-  putByteString $ payloadData $ payload e
-
 buildLog :: Log -> BL.ByteString
 buildLog [] = BL.empty
 buildLog (x:xs) = 
-  BL.append (buildLogEntry x) (buildLog xs)
+  BL.append (buildMessageSet x) (buildLog xs)
 
 writeLog :: Topic -> Partition -> Int -> Log -> IO ()
 writeLog topic partition fileOffset log = do
