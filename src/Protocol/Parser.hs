@@ -14,21 +14,31 @@ messageParser = do
   key <- getWord32be 
   payloadLen <- getWord32be 
   payloadData <- getByteString $ fromIntegral payloadLen
-  return $! Message crc magic attributes key payloadData
+  return $! Message crc magic attributes key payloadLen payloadData
 
 messageSetParser :: Get MessageSet 
 messageSetParser = do 
   offset <- getWord64be
-  length <- getWord32be 
+  len <- getWord32be 
   message <- messageParser
-  return $! MessageSet offset length message
+  return $! MessageSet offset len message
+
+getMessageSets :: Get [MessageSet]
+getMessageSets = do 
+    empty <- isEmpty
+    if empty 
+    then return []
+    else do messageSet <- messageSetParser
+            messageSets <- getMessageSets
+            return (messageSet : messageSets)
 
 partitionParser :: Get Partition
 partitionParser = do 
-  partition <- getWord32be
+  partitionNumber <- getWord32be
   messageSetSize <- getWord32be
+  --messageSet <- runGet getMessageSets $ getByteString $ fromIntegral messageSetSize
   messageSet <- messageSetParser
-  return $! Partition partition messageSetSize messageSet
+  return $! Partition partitionNumber messageSetSize messageSet
 
 getPartitions :: Int -> Get [Partition]
 getPartitions i = do
@@ -38,29 +48,29 @@ getPartitions i = do
             partitions <- getPartitions $ i-1
             return (partition:partitions)
 
-topicsParser :: Get Topic 
-topicsParser = do 
-  topicLen <- getWord16be
-  topicName <- getByteString $ fromIntegral topicLen
+topicParser :: Get Topic 
+topicParser = do 
+  topicNameLen <- getWord16be
+  topicName <- getByteString $ fromIntegral topicNameLen
   numPartitions <- getWord32be
   partitions <- getPartitions $ fromIntegral numPartitions
-  return $! Topic topicName partitions
+  return $! Topic topicNameLen topicName numPartitions partitions
 
 getTopics :: Int -> Get [Topic]
 getTopics i = do 
   if (i < 1)
     then return []
-    else do topic <- topicsParser
+    else do topic <- topicParser
             topics <- getTopics $ i-1
             return (topic:topics)
 
-produceRequestParser :: Get ProduceRequest
+produceRequestParser :: Get Request
 produceRequestParser = do 
   requiredAcks <- getWord16be
   timeout <- getWord32be 
   numTopics <- getWord32be
   topics <- getTopics $ fromIntegral numTopics
-  return $! ProduceRequest requiredAcks timeout topics
+  return $! ProduceRequest requiredAcks timeout numTopics topics
 
 requestMessageParser :: Get RequestMessage 
 requestMessageParser = do 
@@ -75,7 +85,7 @@ requestMessageParser = do
   request <- produceRequestParser
    -- else 
    --   request <- getRemainingLazyByteStringa
-  return $! RequestMessage requestSize apiKey apiVersion correlationId    clientId $ Request request
+  return $! RequestMessage requestSize apiKey apiVersion correlationId clientIdLen clientId $ request
 
 parseData :: String -> IO RequestMessage
 parseData a = do 
