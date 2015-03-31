@@ -42,5 +42,5 @@ data MessageSet = MessageSet
   { offset  :: !Offset
   , len     :: !Length
   , message :: !Message 
-} deriving (Show)
+  } deriving (Show)
 

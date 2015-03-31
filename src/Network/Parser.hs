@@ -1,5 +1,5 @@
 module Network.Parser
-(parseData) where 
+(readRequest) where 
 
 import Common.Types
 import Common.Parser
@@ -63,8 +63,8 @@ requestMessageParser = do
    --   request <- getRemainingLazyByteStringa
   return $! RequestMessage requestSize apiKey apiVersion correlationId clientIdLen clientId $ request
 
-parseData :: String -> IO RequestMessage
-parseData a = do 
+readRequest :: String -> IO RequestMessage
+readRequest a = do 
   input <- BL.readFile a 
   return (runGet requestMessageParser input)
 

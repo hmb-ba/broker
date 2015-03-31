@@ -37,7 +37,7 @@ data RequestMessage = RequestMessage
   , clientIdLen :: !ClientIdLen
   , clientId :: !ClientId
   , request :: Request 
-} deriving (Show)
+  } deriving (Show)
 
 --data Request = ProduceRequest deriving (Show)
 
@@ -63,7 +63,7 @@ data Topic = Topic
   , topicName :: !TopicName
   , numPartitions :: !NumPartitions
   , partitions :: [Partition]
-} deriving (Show)
+  } deriving (Show)
 
 type PartitionNumber = Word32
 type MessageSetSize = Word32
@@ -72,7 +72,7 @@ data Partition = Partition
   { partitionNumber :: !PartitionNumber
   , messageSetSize :: !MessageSetSize
   , messageSet :: MessageSet -- TODO: allow [messageSet]
-} deriving (Show)
+  } deriving (Show)
 
 type Offset = Word64
 type Len = Word32

@@ -23,7 +23,7 @@ parseLogData = do
   writeLog "myfile" 0 0 log
 
 parseNetworkData = do
-  request <- parseData $ "data/payload"
+  request <- readRequest $ "data/payload"
   print request 
 
   --write request to socket (debug with: nc -l 4242 | xxd)
