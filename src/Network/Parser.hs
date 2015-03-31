@@ -1,9 +1,9 @@
-module Protocol.Parser
+module Network.Parser
 (parseData) where 
 
 import Common.Types
 import Common.Parser
-import Protocol.Types
+import Network.Types
 import Data.Binary.Get 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 

@@ -1,4 +1,4 @@
-module Protocol.Types
+module Network.Types
 ( RequestMessage (..)
 , RequestSize
 , ApiKey

@@ -4,8 +4,8 @@ module Main (
 
 import Log.Parser
 import Log.Writer
-import Protocol.Parser
-import Protocol.Writer
+import Network.Parser
+import Network.Writer
 import Network.Socket
 import System.IO
 import System.Environment
@@ -31,4 +31,4 @@ parseNetworkData = do
   setSocketOption sock ReuseAddr 1 
   connect sock (SockAddrInet 4242 iNADDR_ANY)
   hdl <- socketToHandle sock WriteMode 
-  writeProtocol hdl request
+  writeRequest hdl request

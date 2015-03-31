@@ -1,12 +1,12 @@
-module Protocol.Writer 
-( writeProtocol ) where 
+module Network.Writer 
+( writeRequest ) where 
 
 --import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
 import Common.Writer
 import Common.Types
-import Protocol.Types
+import Network.Types
 import System.IO
 
 buildPartition :: Partition -> BL.ByteString
@@ -47,9 +47,9 @@ buildRequestMessage e = runPut $ do
   putByteString $ clientId e 
   putLazyByteString $ buildProduceRequestMessage $ request e
 
-writeProtocol :: Handle -> RequestMessage -> IO()
+writeRequest :: Handle -> RequestMessage -> IO()
 --writeLog topics partitions messageset  = do 
-writeProtocol handle requestMessage = do 
+writeRequest handle requestMessage = do 
   BL.hPut handle (buildRequestMessage requestMessage)
 
 
