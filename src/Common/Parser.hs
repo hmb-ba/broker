@@ -1,5 +1,5 @@
 module Common.Parser
-(payloadParser, messageParser, messageSetParser )
+(messageSetParser )
 where 
 
 import Common.Types 
