@@ -4,12 +4,18 @@ module RequestHandler.Handler (
 ) where 
 
 import Network.Socket 
-import Network.Types
 import qualified Network.Socket.ByteString.Lazy as SockBL
+import qualified Data.ByteString.Lazy as BL
+
 import System.IO 
 import System.Environment
 import Control.Concurrent
+--import Control.Monad.mapM
+
+import Common.Types
+import Network.Types
 import Network.Parser
+import Log.Writer
 
 initHandler :: IO Socket
 initHandler = do
@@ -28,9 +34,24 @@ listenLoop sock =  do
 readStream :: (Socket, SockAddr) -> IO()
 readStream (sock, sockaddr) = do
   input <- SockBL.recv sock 4096
-  let request = input
-  requestMessage <- readRequest request
-  print requestMessage
+  let i  = input
+  requestMessage <- readRequest i
+  case apiKey requestMessage of
+    0  ->  handleProduceRequest $ request requestMessage
+    1  -> putStrLn "FetchRequest"
+    2  -> putStrLn "OffsetRequest"
+    3  -> putStrLn "MetadataRequest"
+    8  -> putStrLn "OffsetCommitRequest"
+    9  -> putStrLn "OffsetFetchRequest"
+    10 -> putStrLn "ConsumerMetadataRequest"
+    _  -> putStrLn "Unknown ApiKey"
+  --print requestMessage
+  return ()
+
+handleProduceRequest :: Request -> IO()
+handleProduceRequest req =  
+  --head mapM (writeLog)  $ [ (topicName x,partitionNumber y,messageSet y :[]) | x <- topics req, y <- (partitions x)  ]
+  --writeLog $ head $ [ (topicName x,partitionNumber y,messageSet y :[]) | x <- topics req, y <- (partitions x)  ]
   return ()
 
 

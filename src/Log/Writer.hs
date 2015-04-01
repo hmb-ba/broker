@@ -10,6 +10,8 @@ import Log.Types
 type Topic = String
 type Partition = Int
 
+type MessageInput = (Topic, Partition, Log)
+
 isTopic :: Topic -> Bool
 isTopic s = True
 
@@ -30,8 +32,8 @@ buildLog [] = BL.empty
 buildLog (x:xs) = 
   BL.append (buildMessageSet x) (buildLog xs)
 
-writeLog :: Topic -> Partition -> Int -> Log -> IO ()
-writeLog topic partition fileOffset log = do
-  let path = getPath (logFolder topic partition) (logFile fileOffset)
-  BL.writeFile path $ buildLog log
 
+writeLog :: MessageInput -> IO() 
+writeLog (topicName, partitionNumber, log) = do
+  let path = getPath (logFolder topicName partitionNumber) (logFile 0)
+  BL.writeFile path $ buildLog log 

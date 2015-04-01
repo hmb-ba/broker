@@ -27,11 +27,11 @@ main = do
 
   --sendNetworkData
 
-parseLogData = do 
-  file <- getArgs
-  log <- parseLog $ head file
+--parseLogData = do 
+  --file <- getArgs
+  --log <- parseLog $ head file
   --print log
-  writeLog "myfile" 0 0 log
+  --writeLog "myfile" 0 0 log
 
 sendNetworkData = do
   request <- readRequestFromFile $ "data/payload"
