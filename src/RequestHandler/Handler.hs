@@ -46,12 +46,12 @@ readStream (sock, sockaddr) = do
     9  -> putStrLn "OffsetFetchRequest"
     10 -> putStrLn "ConsumerMetadataRequest"
     _  -> putStrLn "Unknown ApiKey"
-  --print requestMessage
+  print requestMessage
   return ()
 
 handleProduceRequest :: Request -> IO()
 handleProduceRequest req = do
-  mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y :[] ) | x <- topics req, y <- partitions x ]
+  mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y ) | x <- topics req, y <- partitions x ]
   return()
  
 
