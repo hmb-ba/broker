@@ -7,28 +7,38 @@ import Log.Writer
 import Network.Parser
 import Network.Writer
 import Network.Socket
+import RequestHandler.Handler
 import System.IO
 import System.Environment
 import qualified Data.ByteString.Lazy as BL
+import RequestHandler.Handler
+import Control.Monad
+import Control.Concurrent.Async 
 
 main = do
   parseLogData
-  parseNetworkData
-  putStrLn "done"
+  --t1 <- async $ initHandler
+  initHandler 
+  sendNetworkData
+  --mapM_ wait[t1]
+  putStrLn "exit"
+ -- mainLoop
+
+--mainLoop = forever $ 
 
 parseLogData = do 
   file <- getArgs
   log <- parseLog $ head file
-  print log
+  --print log
   writeLog "myfile" 0 0 log
 
-parseNetworkData = do
-  request <- readRequest $ "data/payload"
-  print request 
-
+sendNetworkData = do
+  request <- readRequestFromFile $ "data/payload"
+ --print request 
   --write request to socket (debug with: nc -l 4242 | xxd)
   sock <- socket AF_INET Stream  defaultProtocol 
   setSocketOption sock ReuseAddr 1 
-  connect sock (SockAddrInet 4242 iNADDR_ANY)
+  connect sock (SockAddrInet 4343 iNADDR_ANY)
   hdl <- socketToHandle sock WriteMode 
   writeRequest hdl request
+
