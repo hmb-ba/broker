@@ -16,15 +16,16 @@ import Control.Monad
 import Control.Concurrent.Async 
 
 main = do
-  parseLogData
-  --t1 <- async $ initHandler
-  initHandler 
-  sendNetworkData
-  --mapM_ wait[t1]
+  --parseLogData
+  
+  sock <- initHandler
+  forever $ do
+    listenLoop sock
+    putStrLn "loop"
+   --mapM_ wait[t1]
   putStrLn "exit"
- -- mainLoop
 
---mainLoop = forever $ 
+  --sendNetworkData
 
 parseLogData = do 
   file <- getArgs

@@ -1,5 +1,6 @@
 module RequestHandler.Handler (
-  initHandler
+    initHandler, 
+    listenLoop
 ) where 
 
 import Network.Socket 
@@ -10,22 +11,19 @@ import System.Environment
 import Control.Concurrent
 import Network.Parser
 
-initHandler :: IO()
+initHandler :: IO Socket
 initHandler = do 
   sock <- socket AF_INET Stream 0 
   setSocketOption sock ReuseAddr 1 
   bindSocket sock (SockAddrInet 4343 iNADDR_ANY)
-  listen sock  2 
-  forkIO (listenLoop sock)
-  return()
-  --listenLoop sock 
+  listen sock 2 
+  return sock
 
 listenLoop :: Socket -> IO()
 listenLoop sock =  do 
   print "A"
   conn <- accept sock 
   print "Aa"
-  --forkIO (readStream conn)
   readStream conn
   listenLoop sock 
 
