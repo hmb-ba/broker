@@ -71,7 +71,7 @@ type MessageSetSize = Word32
 data Partition = Partition 
   { partitionNumber :: !PartitionNumber
   , messageSetSize :: !MessageSetSize
-  , messageSet :: MessageSet -- TODO: allow [messageSet]
+  , messageSet :: [MessageSet] -- TODO: allow [messageSet]
   } deriving (Show)
 
 type Offset = Word64

@@ -12,11 +12,15 @@ import Common.Types
 import Network.Types
 import System.IO
 
+buildMessageSets :: [MessageSet] -> BL.ByteString
+buildMessageSets [] = BL.empty
+buildMessageSets (x:xs) = BL.append (buildMessageSet x) (buildMessageSets xs)
+
 buildPartition :: Partition -> BL.ByteString
 buildPartition e = runPut $ do 
   putWord32be $ partitionNumber e
   putWord32be $ messageSetSize e
-  putLazyByteString $ buildMessageSet $  messageSet e
+  putLazyByteString $ buildMessageSets $  messageSet e
 
 buildPartitions :: [Partition] -> BL.ByteString
 buildPartitions [] = BL.empty

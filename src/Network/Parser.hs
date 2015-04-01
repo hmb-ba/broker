@@ -5,17 +5,31 @@ module Network.Parser
 
 import Common.Types
 import Common.Parser
+import Common.Writer
 import Network.Types
 import Data.Binary.Get 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 
 
+--type Log = [MessageSet]
+
+getMessageSets :: Int -> Get [MessageSet]
+getMessageSets i = do 
+  --empty <- isEmpty 
+  if (i < 1)
+    then return []
+    else do messageSet <- messageSetParser
+            messageSets <- getMessageSets $ i - (fromIntegral $ BL.length $ buildMessageSet messageSet)
+            -- TODO: better Solution for messageSetLength?
+            return (messageSet:messageSets)
+
 partitionParser :: Get Partition
 partitionParser = do 
   partitionNumber <- getWord32be
   messageSetSize <- getWord32be
-  --messageSet <- runGet getMessageSets $ getByteString $ fromIntegral messageSetSize
-  messageSet <- messageSetParser
+  messageSet <- getMessageSets $ fromIntegral messageSetSize
+  --messageSet <-runGet getMessageSets $ getByteString $ fromIntegral messageSetSize
+  --messageSet <- messageSetParser
   return $! Partition partitionNumber messageSetSize messageSet
 
 getPartitions :: Int -> Get [Partition]
