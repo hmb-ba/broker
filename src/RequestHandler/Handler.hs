@@ -6,11 +6,12 @@ module RequestHandler.Handler (
 import Network.Socket 
 import qualified Network.Socket.ByteString.Lazy as SockBL
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as BS
 
 import System.IO 
 import System.Environment
 import Control.Concurrent
---import Control.Monad.mapM
+import Control.Monad
 
 import Common.Types
 import Network.Types
@@ -49,9 +50,8 @@ readStream (sock, sockaddr) = do
   return ()
 
 handleProduceRequest :: Request -> IO()
-handleProduceRequest req =  
-  --head mapM (writeLog)  $ [ (topicName x,partitionNumber y,messageSet y :[]) | x <- topics req, y <- (partitions x)  ]
-  --writeLog $ head $ [ (topicName x,partitionNumber y,messageSet y :[]) | x <- topics req, y <- (partitions x)  ]
-  return ()
-
+handleProduceRequest req = do
+  mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y :[] ) | x <- topics req, y <- partitions x ]
+  return()
+ 
 
