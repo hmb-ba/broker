@@ -15,6 +15,24 @@ build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.10
 
+
+library
+  hs-source-dirs:   src
+  exposed-modules:
+    Common.Types,
+    Common.Parser,
+    Common.Writer,
+    Network.Types,
+    Network.Parser,
+    Network.Writer,
+    Log.Types,
+    Log.Parser,
+    Log.Writer
+  build-depends:
+    base >= 4 && <= 5,
+    bytestring >= 0.10 && < 0.11,
+    binary >=0.5 && <0.6
+
 executable broker
   main-is:             Main.hs
   -- other-modules:       
