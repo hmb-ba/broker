@@ -6,6 +6,8 @@ import Data.Binary.Put
 import Common.Types
 import Common.Writer
 import Log.Types
+import System.Directory
+import Control.Conditional
 
 type Topic = String
 type Partition = Int
@@ -32,8 +34,11 @@ buildLog [] = BL.empty
 buildLog (x:xs) = 
   BL.append (buildMessageSet x) (buildLog xs)
 
-
 writeLog :: MessageInput -> IO() 
 writeLog (topicName, partitionNumber, log) = do
-  let path = getPath (logFolder topicName partitionNumber) (logFile 0)
-  BL.writeFile path $ buildLog log 
+  createDirectoryIfMissing False $ logFolder topicName partitionNumber
+  let filePath = getPath (logFolder topicName partitionNumber) (logFile 0)
+  ifM (doesFileExist filePath) 
+    (BL.appendFile filePath $ buildLog log)
+    (BL.writeFile filePath $ buildLog log)
+
