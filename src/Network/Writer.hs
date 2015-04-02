@@ -3,6 +3,8 @@ module Network.Writer
 
 --import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import Network.Socket
+import qualified Network.Socket.ByteString.Lazy as SBL
 import Data.Binary.Put
 import Common.Writer
 import Common.Types
@@ -51,10 +53,12 @@ buildRequestMessage e = runPut $ do
   putByteString $ clientId e 
   putLazyByteString $ buildProduceRequestMessage $ request e
 
-writeRequest :: Handle -> RequestMessage -> IO()
+writeRequest :: Socket -> RequestMessage -> IO() --TODO: better name
 --writeLog topics partitions messageset  = do 
-writeRequest handle requestMessage = do 
-  BL.hPut handle (buildRequestMessage requestMessage)
+writeRequest socket requestMessage = do 
+  --BL.hPut handle (buildRequestMessage requestMessage)
+  SBL.sendAll socket (buildRequestMessage requestMessage)
+ -- return ()
 
 
 

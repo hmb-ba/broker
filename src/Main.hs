@@ -33,13 +33,3 @@ main = do
   --print log
   --writeLog "myfile" 0 0 log
 
-sendNetworkData = do
-  request <- readRequestFromFile $ "data/payload"
- --print request 
-  --write request to socket (debug with: nc -l 4242 | xxd)
-  sock <- socket AF_INET Stream  defaultProtocol 
-  setSocketOption sock ReuseAddr 1 
-  connect sock (SockAddrInet 4343 iNADDR_ANY)
-  hdl <- socketToHandle sock WriteMode 
-  writeRequest hdl request
-
