@@ -1,5 +1,8 @@
 module Network.Writer 
-( writeRequest ) where 
+(  writeRequest 
+ , buildProduceRequestMessage
+ , buildRequestMessage
+) where 
 
 --import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
