@@ -59,8 +59,8 @@ buildRequestMessage e = runPut $ do
 writeRequest :: Socket -> RequestMessage -> IO() --TODO: better name
 --writeLog topics partitions messageset  = do 
 writeRequest socket requestMessage = do 
-  --BL.hPut handle (buildRequestMessage requestMessage)
-  SBL.sendAll socket (buildRequestMessage requestMessage)
+  let msg = buildRequestMessage requestMessage
+  SBL.sendAll socket msg
  -- return ()
 
 
