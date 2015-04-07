@@ -15,7 +15,7 @@ import Control.Monad
 
 import Common.Types
 import Network.Types.Request
-import Network.Parser
+import Network.Parser.Request
 import Log.Writer
 
 initHandler :: IO Socket

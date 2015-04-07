@@ -24,7 +24,8 @@ library
     Common.Writer,
     Network.Types.Request,
     Network.Types.Response,
-    Network.Parser,
+    Network.Parser.Request,
+    Network.Parser.Response
     Network.Writer.Request,
     Network.Writer.Response,
     Log.Types,

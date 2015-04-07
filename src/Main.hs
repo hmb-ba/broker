@@ -12,9 +12,10 @@ import Control.Concurrent.Async
 --HMB
 import Log.Parser
 import Log.Writer
-import Network.Parser
 import Network.Writer.Request
 import Network.Writer.Response
+import Network.Parser.Request
+import Network.Parser.Response
 import RequestHandler.Handler
 
 main = do

@@ -19,14 +19,15 @@ type Offset = Word64
 type NumResponses = Word32
 type NumErrors = Word32
 
-data ResponseMessage = Response
+data ResponseMessage = ResponseMessage
   { correlationId   :: !CorrelationId
   , numResponses    :: !NumResponses
   , responses        :: [Response]
   } deriving (Show)
 
 data Response = ProduceResponse
-  { topics          :: !TopicName
+  { topicNameLen    :: !TopicNameLen
+  , topicName       :: !TopicName 
   , numErrors       :: !NumErrors
   , errors          :: [Error]
   }

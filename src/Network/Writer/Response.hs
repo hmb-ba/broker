@@ -1,5 +1,5 @@
 module Network.Writer.Response
-( sendResponse 
+( sendProduceResponse 
 ) where 
 
 import qualified Data.ByteString as BS
@@ -21,22 +21,24 @@ buildErrors :: [Error] -> BL.ByteString
 buildErrors [] = BL.empty
 buildErrors (x:xs) = BL.append (buildError x) (buildErrors xs)
 
-buildResponse :: Response -> BL.ByteString
-buildResponse e = runPut $ do 
+buildProduceResponse :: Response -> BL.ByteString
+buildProduceResponse e = runPut $ do 
   putWord16be $ topicNameLen e 
   putByteString $ topicName e
+  putWord32be $ numErrors e 
   putLazyByteString $ buildErrors $ errors e
 
-buildResponses :: [Response] -> BL.ByteString
-buildResponses [] = BL.empty 
-buildResponses (x:xs) = BL.append (buildResponse x) (buildResponses xs)
+buildProduceResponses :: [Response] -> BL.ByteString
+buildProduceResponses [] = BL.empty 
+buildProduceResponses (x:xs) = BL.append (buildProduceResponse x) (buildProduceResponses xs)
 
-buildResponseMessage :: ResponseMessage -> BL.ByteString
-buildResponseMessage e = runPut $ do 
+buildProduceResponseMessage :: ResponseMessage -> BL.ByteString
+buildProduceResponseMessage e = runPut $ do 
   putWord32be $ correlationId e 
-  putLazyByteString $ buildResponses $ responses e 
+  putWord32be $ numResponses e 
+  putLazyByteString $ buildProduceResponses $ responses e 
 
-sendResponse :: Socket -> ResponseMessage -> IO() 
-sendResponse socket responsemessage = do 
-  let msg = buildResponseMessage responsemessage
-  SBL.sendAll socket msg 
+sendProduceResponse :: Socket -> ResponseMessage -> IO() 
+sendProduceResponse socket responsemessage = do 
+  let msg = buildProduceResponseMessage responsemessage
+  SBL.sendAll socket msg

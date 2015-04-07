@@ -1,4 +1,4 @@
-module Network.Parser
+module Network.Parser.Request
 (readRequest,
  readRequestFromFile
 ) where 
@@ -10,8 +10,6 @@ import Network.Types.Request
 import Data.Binary.Get 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 
-
---type Log = [MessageSet]
 
 getMessageSets :: Int -> Get [MessageSet]
 getMessageSets i = do 
