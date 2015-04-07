@@ -1,4 +1,4 @@
-module Common.Writer 
+module HMB.Common.Writer 
 (
 buildMessageSet,
 buildMessage
@@ -7,8 +7,7 @@ where
 
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
-import Common.Types
-import Log.Types
+import HMB.Common.Types
 
 buildMessageSet :: MessageSet -> BL.ByteString
 buildMessageSet e = runPut $ do 

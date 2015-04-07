@@ -1,4 +1,4 @@
-module RequestHandler.Handler (
+module HMB.RequestHandler.Handler (
     initHandler, 
     listenLoop
 ) where 
@@ -13,10 +13,9 @@ import System.Environment
 import Control.Concurrent
 import Control.Monad
 
-import Common.Types
-import Network.Types.Request
-import Network.Parser.Request
-import Log.Writer
+import HMB.Common
+import HMB.Network
+import HMB.Log.Writer
 
 initHandler :: IO Socket
 initHandler = do
@@ -37,7 +36,7 @@ readStream (sock, sockaddr) = do
   input <- SockBL.recv sock 4096
   let i  = input
   requestMessage <- readRequest i
-  case apiKey requestMessage of
+  case reqApiKey requestMessage of
     0  -> handleProduceRequest $ request requestMessage
     1  -> putStrLn "FetchRequest"
     2  -> putStrLn "OffsetRequest"
@@ -51,7 +50,7 @@ readStream (sock, sockaddr) = do
 
 handleProduceRequest :: Request -> IO()
 handleProduceRequest req = do
-  mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y ) | x <- topics req, y <- partitions x ]
+  mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y ) | x <- reqTopics req, y <- partitions x ]
   
   return()
  

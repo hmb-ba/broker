@@ -1,9 +1,9 @@
-module Network.Parser.Response 
+module HMB.Network.Parser.Response 
 (
   readProduceResponse
 ) where 
 
-import Network.Types.Response
+import HMB.Network.Types
 import Data.Binary.Get 
 import qualified Data.ByteString.Lazy as BL 
 

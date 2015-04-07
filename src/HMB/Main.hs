@@ -10,13 +10,9 @@ import Control.Monad
 import Control.Concurrent.Async 
 
 --HMB
-import Log.Parser
-import Log.Writer
-import Network.Writer.Request
-import Network.Writer.Response
-import Network.Parser.Request
-import Network.Parser.Response
-import RequestHandler.Handler
+import HMB.Log
+import HMB.Network
+import HMB.RequestHandler.Handler
 
 main = do
   --parseLogData

@@ -1,4 +1,4 @@
-module Network.Writer.Request 
+module HMB.Network.Writer.Request 
 (  writeRequest 
  , buildProduceRequestMessage
  , buildRequestMessage
@@ -9,9 +9,8 @@ import qualified Data.ByteString.Lazy as BL
 import Network.Socket
 import qualified Network.Socket.ByteString.Lazy as SBL
 import Data.Binary.Put
-import Common.Writer
-import Common.Types
-import Network.Types.Request
+import HMB.Common
+import HMB.Network.Types
 import System.IO
 
 buildMessageSets :: [MessageSet] -> BL.ByteString
@@ -41,19 +40,19 @@ buildTopics (x:xs) = BL.append (buildTopic x) (buildTopics xs)
 
 buildProduceRequestMessage :: Request -> BL.ByteString
 buildProduceRequestMessage e = runPut $ do 
-  putWord16be $ requiredAcks e
-  putWord32be $ timeout e 
-  putWord32be $ numTopics e 
-  putLazyByteString $ buildTopics $ topics e
+  putWord16be $ reqRequiredAcks e
+  putWord32be $ reqTimeout e 
+  putWord32be $ reqNumTopics e 
+  putLazyByteString $ buildTopics $ reqTopics e
 
 buildRequestMessage :: RequestMessage -> BL.ByteString
 buildRequestMessage e = runPut $ do 
-  putWord32be $ requestSize e
-  putWord16be $ apiKey e 
-  putWord16be $ apiVersion e 
-  putWord32be $ correlationId e 
-  putWord16be $ clientIdLen e 
-  putByteString $ clientId e 
+  putWord32be $ reqSize e
+  putWord16be $ reqApiKey e 
+  putWord16be $ reqApiVersion e 
+  putWord32be $ reqCorrelationId e 
+  putWord16be $ reqClientIdLen e 
+  putByteString $ reqClientId e 
   putLazyByteString $ buildProduceRequestMessage $ request e
 
 writeRequest :: Socket -> RequestMessage -> IO() --TODO: better name

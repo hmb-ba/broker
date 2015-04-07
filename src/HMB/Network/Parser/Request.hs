@@ -1,15 +1,17 @@
-module Network.Parser.Request
+module HMB.Network.Parser.Request
 (readRequest,
  readRequestFromFile
 ) where 
 
-import Common.Types
-import Common.Parser
-import Common.Writer
-import Network.Types.Request
+import HMB.Common
+import HMB.Network.Types
 import Data.Binary.Get 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 
+
+----------
+-- Request
+----------
 
 getMessageSets :: Int -> Get [MessageSet]
 getMessageSets i = do 
@@ -85,5 +87,10 @@ readRequestFromFile :: String -> IO RequestMessage --Temp
 readRequestFromFile a = do 
   input <- BL.readFile a 
   return (runGet requestMessageParser input)
+
+
+-----------
+-- Response
+-----------
 
 

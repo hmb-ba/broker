@@ -1,8 +1,8 @@
-module Common.Parser
+module HMB.Common.Parser
 (messageSetParser )
 where 
 
-import Common.Types 
+import HMB.Common.Types
 import Data.Binary.Get
 import qualified Data.ByteString.Lazy as BL
 

@@ -1,4 +1,4 @@
-module Common.Types
+module HMB.Common.Types
 ( MessageSet (..)
 , Message (..)
 , Payload (..)
@@ -10,6 +10,8 @@ module Common.Types
 , Attributes
 , KeyLength
 , PayloadLength
+
+, Log
 ) where
 
 import Data.Word
@@ -43,4 +45,10 @@ data MessageSet = MessageSet
   , len     :: !Length
   , message :: !Message 
   } deriving (Show)
+
+---------------------
+-- Types used for Log
+---------------------
+type Log = [MessageSet]
+
 

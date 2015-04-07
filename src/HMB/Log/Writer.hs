@@ -1,11 +1,9 @@
-module Log.Writer
+module HMB.Log.Writer
 ( writeLog ) where
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
-import Common.Types
-import Common.Writer
-import Log.Types
+import HMB.Common
 import System.Directory
 import Control.Conditional
 

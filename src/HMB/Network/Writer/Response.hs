@@ -1,4 +1,4 @@
-module Network.Writer.Response
+module HMB.Network.Writer.Response
 ( sendProduceResponse 
 ) where 
 
@@ -9,13 +9,13 @@ import Network.Socket
 import Data.Binary.Put
 
 --HMB
-import Network.Types.Response
+import HMB.Network.Types
 
 buildError :: Error -> BL.ByteString 
 buildError e = runPut $ do 
-  putWord32be $ partitionNumber e
-  putWord16be $ errorCode e 
-  putWord64be $ offset e 
+  putWord32be $ errPartitionNumber e
+  putWord16be $ errCode e 
+  putWord64be $ errOffset e 
 
 buildErrors :: [Error] -> BL.ByteString
 buildErrors [] = BL.empty
@@ -23,10 +23,10 @@ buildErrors (x:xs) = BL.append (buildError x) (buildErrors xs)
 
 buildProduceResponse :: Response -> BL.ByteString
 buildProduceResponse e = runPut $ do 
-  putWord16be $ topicNameLen e 
-  putByteString $ topicName e
-  putWord32be $ numErrors e 
-  putLazyByteString $ buildErrors $ errors e
+  putWord16be $ resTopicNameLen e 
+  putByteString $ resTopicName e
+  putWord32be $ resNumErrors e 
+  putLazyByteString $ buildErrors $ resErrors e
 
 buildProduceResponses :: [Response] -> BL.ByteString
 buildProduceResponses [] = BL.empty 
@@ -34,8 +34,8 @@ buildProduceResponses (x:xs) = BL.append (buildProduceResponse x) (buildProduceR
 
 buildProduceResponseMessage :: ResponseMessage -> BL.ByteString
 buildProduceResponseMessage e = runPut $ do 
-  putWord32be $ correlationId e 
-  putWord32be $ numResponses e 
+  putWord32be $ resCorrelationId e 
+  putWord32be $ resNumResponses e 
   putLazyByteString $ buildProduceResponses $ responses e 
 
 sendProduceResponse :: Socket -> ResponseMessage -> IO() 

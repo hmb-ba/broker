@@ -19,18 +19,17 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:   src
   exposed-modules:
-    Common.Types,
-    Common.Parser,
-    Common.Writer,
-    Network.Types.Request,
-    Network.Types.Response,
-    Network.Parser.Request,
-    Network.Parser.Response
-    Network.Writer.Request,
-    Network.Writer.Response,
-    Log.Types,
-    Log.Parser,
-    Log.Writer
+    HMB.Common,
+    HMB.Common.Types,
+    HMB.Common.Writer,
+    HMB.Common.Parser,
+    HMB.Network,
+    HMB.Network.Types,
+    HMB.Network.Parser,
+    HMB.Network.Writer,
+    HMB.Network.Writer.Request,
+    HMB.Network.Writer.Response,
+    HMB.Log
   build-depends:
     base >= 4 && <= 5,
     bytestring >= 0.10 && < 0.11,
@@ -38,8 +37,9 @@ library
     network >= 2.4,
     directory >= 1.2,
     cond >= 0.4
+
 executable broker
-  main-is:             Main.hs
+  main-is:             HMB/Main.hs
   -- other-modules:       
   -- other-extensions:    
   build-depends:       

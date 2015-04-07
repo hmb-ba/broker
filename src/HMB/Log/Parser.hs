@@ -1,9 +1,7 @@
-module Log.Parser
+module HMB.Log.Parser
 ( parseLog ) where
 
-import Common.Types
-import Common.Parser
-import Log.Types
+import HMB.Common
 import Data.Binary.Get
 import qualified Data.ByteString.Lazy as BL
 
