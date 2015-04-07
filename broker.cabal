@@ -22,9 +22,11 @@ library
     Common.Types,
     Common.Parser,
     Common.Writer,
-    Network.Types,
+    Network.Types.Request,
+    Network.Types.Response,
     Network.Parser,
-    Network.Writer,
+    Network.Writer.Request,
+    Network.Writer.Response,
     Log.Types,
     Log.Parser,
     Log.Writer

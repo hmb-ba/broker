@@ -6,7 +6,7 @@ module Network.Parser
 import Common.Types
 import Common.Parser
 import Common.Writer
-import Network.Types
+import Network.Types.Request
 import Data.Binary.Get 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 

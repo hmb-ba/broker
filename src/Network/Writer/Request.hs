@@ -1,4 +1,4 @@
-module Network.Writer 
+module Network.Writer.Request 
 (  writeRequest 
  , buildProduceRequestMessage
  , buildRequestMessage
@@ -11,7 +11,7 @@ import qualified Network.Socket.ByteString.Lazy as SBL
 import Data.Binary.Put
 import Common.Writer
 import Common.Types
-import Network.Types
+import Network.Types.Request
 import System.IO
 
 buildMessageSets :: [MessageSet] -> BL.ByteString
@@ -62,6 +62,7 @@ writeRequest socket requestMessage = do
   let msg = buildRequestMessage requestMessage
   SBL.sendAll socket msg
  -- return ()
+
 
 
 

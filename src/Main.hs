@@ -2,18 +2,20 @@ module Main (
   main
 ) where
 
-import Log.Parser
-import Log.Writer
-import Network.Parser
-import Network.Writer
 import Network.Socket
-import RequestHandler.Handler
 import System.IO
 import System.Environment
 import qualified Data.ByteString.Lazy as BL
-import RequestHandler.Handler
 import Control.Monad
 import Control.Concurrent.Async 
+
+--HMB
+import Log.Parser
+import Log.Writer
+import Network.Parser
+import Network.Writer.Request
+import Network.Writer.Response
+import RequestHandler.Handler
 
 main = do
   --parseLogData

@@ -14,7 +14,7 @@ import Control.Concurrent
 import Control.Monad
 
 import Common.Types
-import Network.Types
+import Network.Types.Request
 import Network.Parser
 import Log.Writer
 
@@ -38,7 +38,7 @@ readStream (sock, sockaddr) = do
   let i  = input
   requestMessage <- readRequest i
   case apiKey requestMessage of
-    0  ->  handleProduceRequest $ request requestMessage
+    0  -> handleProduceRequest $ request requestMessage
     1  -> putStrLn "FetchRequest"
     2  -> putStrLn "OffsetRequest"
     3  -> putStrLn "MetadataRequest"
@@ -52,6 +52,7 @@ readStream (sock, sockaddr) = do
 handleProduceRequest :: Request -> IO()
 handleProduceRequest req = do
   mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y ) | x <- topics req, y <- partitions x ]
+  
   return()
  
 
