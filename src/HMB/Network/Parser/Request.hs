@@ -79,6 +79,18 @@ metadataRequestParser = do
   topics <- getTopicNames $ fromIntegral numTopicNames
   return $ MetadataRequest topics
 
+fetchRequestParser :: Get Request
+fetchRequestParser = do
+  replicaId     <- getWord32be
+  maxWaitTime   <- getWord32be
+  minBytes      <- getWord32be
+  topicNameLen  <- getWord16be
+  topicName     <- getByteString $ fromIntegral topicNameLen
+  partition     <- getWord32be
+  fetchOffset   <- getWord64be
+  maxBytes      <- getWord32be
+  return $ FetchRequest replicaId maxWaitTime minBytes
+
 requestMessageParser :: Get RequestMessage 
 requestMessageParser = do 
   requestSize <- getWord32be
@@ -88,8 +100,9 @@ requestMessageParser = do
   clientIdLen <- getWord16be 
   clientId <- getByteString $ fromIntegral clientIdLen
   request <- case (fromIntegral apiKey) of
-      0 -> produceRequestParser
-      3 -> metadataRequestParser
+    0 -> produceRequestParser
+    1 -> fetchRequestParser
+    3 -> metadataRequestParser
   --request <- produceRequestParser
   return $ RequestMessage requestSize apiKey apiVersion correlationId clientIdLen clientId request
 
