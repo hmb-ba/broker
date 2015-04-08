@@ -9,9 +9,6 @@ import Data.Binary.Get
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 
 
-----------
--- Request
-----------
 
 getMessageSets :: Int -> Get [MessageSet]
 getMessageSets i = do 
@@ -28,9 +25,7 @@ partitionParser = do
   partitionNumber <- getWord32be
   messageSetSize <- getWord32be
   messageSet <- getMessageSets $ fromIntegral messageSetSize
-  --messageSet <-runGet getMessageSets $ getByteString $ fromIntegral messageSetSize
-  --messageSet <- messageSetParser
-  return $! Partition partitionNumber messageSetSize messageSet
+  return $ Partition partitionNumber messageSetSize messageSet
 
 getPartitions :: Int -> Get [Partition]
 getPartitions i = do
@@ -46,7 +41,7 @@ topicParser = do
   topicName <- getByteString $ fromIntegral topicNameLen
   numPartitions <- getWord32be
   partitions <- getPartitions $ fromIntegral numPartitions
-  return $! Topic topicNameLen topicName numPartitions partitions
+  return $ Topic topicNameLen topicName numPartitions partitions
 
 getTopics :: Int -> Get [Topic]
 getTopics i = do 
@@ -62,7 +57,27 @@ produceRequestParser = do
   timeout <- getWord32be 
   numTopics <- getWord32be
   topics <- getTopics $ fromIntegral numTopics
-  return $! ProduceRequest requiredAcks timeout numTopics topics
+  return $ ProduceRequest requiredAcks timeout numTopics topics
+
+topicNameParser :: Get TopicName
+topicNameParser = do 
+  topicNameLen <- getWord16be
+  topicName <- getByteString $ fromIntegral topicNameLen
+  return topicName
+
+getTopicNames :: Int -> Get [TopicName]
+getTopicNames i = do
+  if (i < 1)
+    then return []
+    else do topicName <- topicNameParser
+            topicNames <- getTopicNames $ i-1
+            return (topicName:topicNames)
+
+metadataRequestParser :: Get Request
+metadataRequestParser = do 
+  numTopicNames <- getWord32be
+  topics <- getTopicNames $ fromIntegral numTopicNames
+  return $ MetadataRequest topics
 
 requestMessageParser :: Get RequestMessage 
 requestMessageParser = do 
@@ -72,12 +87,11 @@ requestMessageParser = do
   correlationId <- getWord32be 
   clientIdLen <- getWord16be 
   clientId <- getByteString $ fromIntegral clientIdLen
-  --if apiKey =  0 
-   -- then
-  request <- produceRequestParser
-   -- else 
-   --   request <- getRemainingLazyByteStringa
-  return $! RequestMessage requestSize apiKey apiVersion correlationId clientIdLen clientId $ request
+  request <- case (fromIntegral apiKey) of
+      0 -> produceRequestParser
+      3 -> metadataRequestParser
+  --request <- produceRequestParser
+  return $ RequestMessage requestSize apiKey apiVersion correlationId clientIdLen clientId request
 
 readRequest :: BL.ByteString -> IO RequestMessage
 readRequest a = do 
@@ -87,10 +101,4 @@ readRequestFromFile :: String -> IO RequestMessage --Temp
 readRequestFromFile a = do 
   input <- BL.readFile a 
   return (runGet requestMessageParser input)
-
-
------------
--- Response
------------
-
 

@@ -68,7 +68,7 @@ data Request = ProduceRequest
   , reqNumTopics       :: !NumTopics
   , reqTopics          :: [Topic]
   }
-  | MetainfoRequest
+  | MetadataRequest
   { reqTopicNames      :: [TopicName] }
   deriving (Show)
 
