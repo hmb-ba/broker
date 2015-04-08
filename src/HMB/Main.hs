@@ -11,7 +11,7 @@ import Control.Concurrent.Async
 
 --HMB
 import HMB.Log
-import HMB.Network
+import HMB.Protocol
 import HMB.Handler
 
 main = do

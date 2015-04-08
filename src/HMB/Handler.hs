@@ -14,7 +14,7 @@ import Control.Concurrent
 import Control.Monad
 
 import HMB.Common
-import HMB.Network
+import HMB.Protocol
 import HMB.Log.Writer
 
 initHandler :: IO Socket

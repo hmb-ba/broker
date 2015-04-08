@@ -1,10 +1,10 @@
-module HMB.Network.Parser.Request
+module HMB.Protocol.Parser.Request
 (readRequest,
  readRequestFromFile
 ) where 
 
 import HMB.Common
-import HMB.Network.Types
+import HMB.Protocol.Types
 import Data.Binary.Get 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL 

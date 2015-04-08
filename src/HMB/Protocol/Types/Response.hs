@@ -1,4 +1,4 @@
-module HMB.Network.Types.Response
+module HMB.Protocol.Types.Response
 ( Response (..)
 , ResponseMessage (..)
 , Error (..)

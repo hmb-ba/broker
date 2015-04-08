@@ -1,4 +1,4 @@
-module HMB.Network.Writer.Response
+module HMB.Protocol.Serializer.Response
 ( sendProduceResponse 
 ) where 
 
@@ -9,7 +9,7 @@ import Network.Socket
 import Data.Binary.Put
 
 --HMB
-import HMB.Network.Types
+import HMB.Protocol.Types
 
 buildError :: Error -> BL.ByteString 
 buildError e = runPut $ do 
@@ -42,3 +42,4 @@ sendProduceResponse :: Socket -> ResponseMessage -> IO()
 sendProduceResponse socket responsemessage = do 
   let msg = buildProduceResponseMessage responsemessage
   SBL.sendAll socket msg
+

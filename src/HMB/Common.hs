@@ -2,7 +2,7 @@ module HMB.Common
     ( module HMB.Common.Types
     , module HMB.Common.Parser
     , module HMB.Common.Writer
-    ) where
+)  where
 
 import HMB.Common.Types
 import HMB.Common.Parser

@@ -1,4 +1,4 @@
-module HMB.Network.Writer.Request 
+module HMB.Protocol.Serializer.Request 
 ( buildMessageSets
   , buildPartition
   , buildPartitions
@@ -13,7 +13,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Network.Socket.ByteString.Lazy as SBL
 
 import HMB.Common
-import HMB.Network.Types
+import HMB.Protocol.Types
 
 buildMessageSets :: [MessageSet] -> BL.ByteString
 buildMessageSets [] = BL.empty
@@ -56,6 +56,7 @@ buildRequestMessage e = runPut $ do
   putWord16be $ reqClientIdLen e 
   putByteString $ reqClientId e 
   putLazyByteString $ buildProduceRequestMessage $ request e
+
 
 
 

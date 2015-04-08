@@ -1,4 +1,4 @@
-module HMB.Network.Types.Request
+module HMB.Protocol.Types.Request
 ( RequestMessage (..)
 , RequestSize
 , ApiKey
