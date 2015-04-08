@@ -4,22 +4,24 @@ module HMB.Internal.Log.Writer
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
-import HMB.Common
 import System.Directory
 import Control.Conditional
 
-type Topic = String
-type Partition = Int
+import Kafka.Protocol.Types
+import Kafka.Protocol.Serializer
 
-type MessageInput = (Topic, Partition, Log)
+type TopicStr = String --TODO: better name (ambigious)
+type PartitionStr = Int  -- TODO: better name (ambigious)
+
+type MessageInput = (TopicStr, PartitionStr, Log)
 
 isTopic :: Topic -> Bool
 isTopic s = True
 
-isPartition :: Partition -> Bool
+isPartition :: PartitionStr -> Bool
 isPartition p = True
 
-logFolder :: Topic -> Partition -> String
+logFolder :: TopicStr -> PartitionStr -> String
 logFolder t p = t ++ "_" ++ show p
 
 logFile :: (Integral i) => i -> String

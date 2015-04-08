@@ -19,23 +19,8 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:   src
   exposed-modules:
-    HMB.Common,
-    HMB.Common.Types,
-    HMB.Common.Writer,
-    HMB.Common.Parser,
-    HMB.Protocol,
-    HMB.Protocol.Types,
-    HMB.Protocol.Types.Request,
-    HMB.Protocol.Types.Response,
-    HMB.Protocol.Parser,
-    HMB.Protocol.Parser.Request,
-    HMB.Protocol.Parser.Response,
-    HMB.Protocol.Serializer,
-    HMB.Protocol.Serializer.Request,
-    HMB.Protocol.Serializer.Response,
     HMB.Client.Producer,
     HMB.Client.Consumer
-    --HMB.Log
   build-depends:
     base >= 4 && <= 5,
     bytestring >= 0.10 && < 0.11,
@@ -43,8 +28,8 @@ library
     network >= 2.4,
     directory >= 1.2,
     cond >= 0.4, 
-    digest >= 0.0.1.2
-
+    digest >= 0.0.1.2,
+    kafka-protocol -any
 executable broker
   main-is:             HMB/Main.hs
   -- other-modules:       
@@ -57,6 +42,7 @@ executable broker
     async >= 2.0,
     cond >= 0.4,
     directory >= 1.2,
-    digest >= 0.0.1.2
+    digest >= 0.0.1.2,
+    kafka-protocol -any
   hs-source-dirs:      src
   default-language:    Haskell2010

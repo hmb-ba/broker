@@ -13,8 +13,8 @@ import System.Environment
 import Control.Concurrent
 import Control.Monad
 
-import HMB.Common
-import HMB.Protocol
+import Kafka.Protocol
+
 import HMB.Internal.Log
 
 initHandler :: IO Socket

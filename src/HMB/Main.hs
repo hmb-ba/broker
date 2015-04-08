@@ -10,8 +10,8 @@ import Control.Monad
 import Control.Concurrent.Async 
 
 --HMB
+import Kafka.Protocol
 import HMB.Internal.Log
-import HMB.Protocol
 import HMB.Internal.Handler
 
 main = do

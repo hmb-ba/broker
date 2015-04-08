@@ -8,8 +8,7 @@ where
 
 import Network.Socket
 
-import HMB.Common
-import HMB.Protocol
+import Kafka.Protocol
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
