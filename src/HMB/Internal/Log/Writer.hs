@@ -1,5 +1,6 @@
-module HMB.Log.Writer
+module HMB.Internal.Log.Writer
 ( writeLog ) where
+
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
@@ -30,7 +31,7 @@ getPath folder file = folder ++ "/" ++ file
 buildLog :: Log -> BL.ByteString
 buildLog [] = BL.empty
 buildLog (x:xs) = 
-  BL.append (buildMessageSet x) (buildLog xs)
+  BL.append (buildMessageSet x) (buildLog xs) 
 
 writeLog :: MessageInput -> IO() 
 writeLog (topicName, partitionNumber, log) = do

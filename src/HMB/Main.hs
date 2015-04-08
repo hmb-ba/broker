@@ -10,9 +10,9 @@ import Control.Monad
 import Control.Concurrent.Async 
 
 --HMB
-import HMB.Log
+import HMB.Internal.Log
 import HMB.Protocol
-import HMB.Handler
+import HMB.Internal.Handler
 
 main = do
   --parseLogData

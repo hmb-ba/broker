@@ -1,4 +1,4 @@
-module HMB.Handler (
+module HMB.Internal.Handler (
     initHandler, 
     listenLoop
 ) where 
@@ -15,7 +15,7 @@ import Control.Monad
 
 import HMB.Common
 import HMB.Protocol
-import HMB.Log.Writer
+import HMB.Internal.Log
 
 initHandler :: IO Socket
 initHandler = do

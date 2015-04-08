@@ -1,4 +1,4 @@
-module HMB.Log.Parser
+module HMB.Internal.Log.Parser
 ( parseLog ) where
 
 import HMB.Common
