@@ -1,13 +1,17 @@
 module HMB.Common.Writer 
 (
 buildMessageSet,
-buildMessage
+buildMessage,
+buildPayload
 ) 
 where
 
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
 import HMB.Common.Types
+
+import Data.Digest.CRC32
+
 
 buildMessageSet :: MessageSet -> BL.ByteString
 buildMessageSet e = runPut $ do 
@@ -17,10 +21,16 @@ buildMessageSet e = runPut $ do
 
 buildMessage :: Message -> BL.ByteString
 buildMessage e = runPut $ do 
+  --putWord32be $ crc32 $ payloadData $ payload e
   putWord32be $ crc e
+  putLazyByteString $ buildPayload $ payload e 
+
+buildPayload :: Payload -> BL.ByteString 
+buildPayload e = runPut $ do 
   putWord8    $ magic e
   putWord8    $ attr e
-  putWord32be $ keylen $ payload e
-  putWord32be $ payloadLen $ payload e
-  putByteString $ payloadData $ payload e
+  putWord32be $ keylen $ e
+  putWord32be $ payloadLen $ e
+  putByteString $ payloadData $ e
+
 
