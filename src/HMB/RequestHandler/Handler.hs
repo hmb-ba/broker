@@ -51,10 +51,9 @@ readReqFromSock (sock, sockaddr) = do
 handleProduceRequest :: Request -> Socket -> IO()
 handleProduceRequest req sock = do
   mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y ) | x <- reqTopics req, y <- partitions x ]
-  
   sendProduceResponse sock packProduceResponse 
-  --return()
 
+-- TODO dynamic function
 packProduceResponse :: ResponseMessage 
 packProduceResponse = 
   let error = Error {

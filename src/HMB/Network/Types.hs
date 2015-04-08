@@ -5,3 +5,4 @@ module HMB.Network.Types
 
 import HMB.Network.Types.Request
 import HMB.Network.Types.Response
+
