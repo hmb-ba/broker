@@ -26,6 +26,8 @@ library
     HMB.Network,
     HMB.Network.Types,
     HMB.Network.Parser,
+    HMB.Network.Parser.Request,
+    HMB.Network.Parser.Response,
     HMB.Network.Writer,
     HMB.Network.Writer.Request,
     HMB.Network.Writer.Response,

@@ -28,16 +28,16 @@ initHandler = do
 listenLoop :: Socket -> IO()
 listenLoop sock =  do
   conn <- accept sock
-  readStream conn
+  readReqFromSock conn
   listenLoop sock
 
-readStream :: (Socket, SockAddr) -> IO()
-readStream (sock, sockaddr) = do
+readReqFromSock :: (Socket, SockAddr) -> IO()
+readReqFromSock (sock, sockaddr) = do
   input <- SockBL.recv sock 4096
   let i  = input
   requestMessage <- readRequest i
   case reqApiKey requestMessage of
-    0  -> handleProduceRequest $ request requestMessage
+    0  -> handleProduceRequest (request requestMessage) sock
     1  -> putStrLn "FetchRequest"
     2  -> putStrLn "OffsetRequest"
     3  -> putStrLn "MetadataRequest"
@@ -48,10 +48,32 @@ readStream (sock, sockaddr) = do
   print requestMessage
   return ()
 
-handleProduceRequest :: Request -> IO()
-handleProduceRequest req = do
+handleProduceRequest :: Request -> Socket -> IO()
+handleProduceRequest req sock = do
   mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y ) | x <- reqTopics req, y <- partitions x ]
   
-  return()
- 
+  sendProduceResponse sock packProduceResponse 
+  --return()
 
+packProduceResponse :: ResponseMessage 
+packProduceResponse = 
+  let error = Error {
+      errPartitionNumber = 0 
+    , errCode = 0
+    , errOffset = 0
+  }
+  in
+  let response = ProduceResponse {
+      resTopicName = BS.pack "topicHardCoded"
+    , resTopicNameLen = fromIntegral $ BS.length $ BS.pack "topicHardCoded"
+    , resNumErrors = 1
+    , resErrors = [error]
+  }
+  in
+  let responseMessage = ResponseMessage {
+      resCorrelationId = 0 
+    , resNumResponses = 1 
+    , responses = [response]
+  }
+  in 
+  responseMessage 
