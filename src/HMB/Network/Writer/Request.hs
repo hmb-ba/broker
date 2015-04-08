@@ -1,17 +1,19 @@
 module HMB.Network.Writer.Request 
-(  writeRequest 
- , buildProduceRequestMessage
- , buildRequestMessage
+( buildMessageSets
+  , buildPartition
+  , buildPartitions
+  , buildTopic
+  , buildTopics
+  , buildProduceRequestMessage
+  , buildRequestMessage
 ) where 
 
---import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
-import Network.Socket
-import qualified Network.Socket.ByteString.Lazy as SBL
 import Data.Binary.Put
+import qualified Data.ByteString.Lazy as BL
+import qualified Network.Socket.ByteString.Lazy as SBL
+
 import HMB.Common
 import HMB.Network.Types
-import System.IO
 
 buildMessageSets :: [MessageSet] -> BL.ByteString
 buildMessageSets [] = BL.empty
@@ -54,13 +56,6 @@ buildRequestMessage e = runPut $ do
   putWord16be $ reqClientIdLen e 
   putByteString $ reqClientId e 
   putLazyByteString $ buildProduceRequestMessage $ request e
-
-writeRequest :: Socket -> RequestMessage -> IO() --TODO: better name
---writeLog topics partitions messageset  = do 
-writeRequest socket requestMessage = do 
-  let msg = buildRequestMessage requestMessage
-  SBL.sendAll socket msg
- -- return ()
 
 
 

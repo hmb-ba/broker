@@ -1,6 +1,6 @@
 module HMB.Network.Parser.Response 
 (
-  readProduceResponse
+  produceResponseMessageParser
 ) where 
 
 import HMB.Network.Types
@@ -45,6 +45,4 @@ produceResponseMessageParser = do
   responses <- getProduceResponses $ fromIntegral numResponses
   return $! ResponseMessage correlationId numResponses responses
 
-readProduceResponse :: BL.ByteString -> IO ResponseMessage
-readProduceResponse a =  do 
-  return (runGet produceResponseMessageParser a)
+

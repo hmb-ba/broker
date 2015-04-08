@@ -1,4 +1,4 @@
-module HMB.RequestHandler.Handler (
+module HMB.Handler (
     initHandler, 
     listenLoop
 ) where 

@@ -12,7 +12,7 @@ import Control.Concurrent.Async
 --HMB
 import HMB.Log
 import HMB.Network
-import HMB.RequestHandler.Handler
+import HMB.Handler
 
 main = do
   --parseLogData
