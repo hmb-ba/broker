@@ -8,18 +8,18 @@ import qualified Data.ByteString.Lazy as BL
 
 payloadParser :: Get Payload
 payloadParser = do
+  magic  <- getWord8
+  attr   <- getWord8
   keylen <- getWord32be
   paylen <- getWord32be
   payload <- getByteString $ fromIntegral paylen
-  return $! Payload keylen paylen payload
+  return $! Payload magic attr keylen paylen payload
 
 messageParser :: Get Message 
 messageParser = do 
   crc    <- getWord32be
-  magic  <- getWord8
-  attr   <- getWord8
   p      <- payloadParser
-  return $! Message crc magic attr p
+  return $! Message crc p
 
 messageSetParser :: Get MessageSet 
 messageSetParser = do 

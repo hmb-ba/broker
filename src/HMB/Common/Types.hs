@@ -27,7 +27,9 @@ type KeyLength = Word32
 type PayloadLength = Word32
 
 data Payload = Payload
-  { keylen      :: !KeyLength
+  { magic   :: !Magic
+  , attr    :: !Attributes
+  , keylen      :: !KeyLength
   --todo: key
   , payloadLen  :: !PayloadLength
   , payloadData :: !PayloadData
@@ -35,8 +37,6 @@ data Payload = Payload
 
 data Message = Message 
   { crc     :: !Crc
-  , magic   :: !Magic
-  , attr    :: !Attributes
   , payload :: Payload
   } deriving (Show)
 
