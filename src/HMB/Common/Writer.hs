@@ -2,8 +2,7 @@ module HMB.Common.Writer
 (
 buildMessageSet,
 buildMessage,
-buildPayload,
-buildForCrc
+buildPayload
 ) 
 where
 
@@ -34,11 +33,4 @@ buildPayload e = runPut $ do
   putWord32be $ payloadLen $ e
   putByteString $ payloadData $ e
 
-buildForCrc :: Payload -> BL.ByteString
-buildForCrc e = runPut $ do 
-  putWord8    $ magic e
-  putWord8    $ attr e
-  putWord32be $ keylen $ e
-  --putWord32be $ payloadLen $ e
-  putByteString $ payloadData $ e
 
