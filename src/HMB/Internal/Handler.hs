@@ -36,7 +36,7 @@ readReqFromSock (sock, sockaddr) = do
   input <- SockBL.recv sock 4096
   let i  = input
   requestMessage <- readRequest i
-  case reqApiKey requestMessage of
+  case rqApiKey requestMessage of
     0  -> handleProduceRequest (request requestMessage) sock
     1  -> putStrLn "FetchRequest"
     2  -> putStrLn "OffsetRequest"
@@ -50,29 +50,20 @@ readReqFromSock (sock, sockaddr) = do
 
 handleProduceRequest :: Request -> Socket -> IO()
 handleProduceRequest req sock = do
-  mapM writeLog [ (BS.unpack(topicName x), fromIntegral(partitionNumber y), messageSet y ) | x <- reqTopics req, y <- partitions x ]
+  mapM writeLog [ (BS.unpack(rqPrTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) | x <- rqPrTopics req, y <- rqPrPartitions x ]
   sendProduceResponse sock packProduceResponse 
 
 -- TODO dynamic function
 packProduceResponse :: ResponseMessage 
 packProduceResponse = 
-  let error = Error {
-      errPartitionNumber = 0 
-    , errCode = 0
-    , errOffset = 0
-  }
+  let error = RsPrError 0 0 0 
   in
-  let response = ProduceResponse {
-      resTopicName = BS.pack "topicHardCoded"
-    , resTopicNameLen = fromIntegral $ BS.length $ BS.pack "topicHardCoded"
-    , resNumErrors = 1
-    , resErrors = [error]
-  }
+  let response = ProduceResponse 
+        BS.pack "topicHardCoded"
+        fromIntegral $ BS.length $ BS.pack "topicHardCoded"
+        1
+        [error]
   in
-  let responseMessage = ResponseMessage {
-      resCorrelationId = 0 
-    , resNumResponses = 1 
-    , responses = [response]
-  }
+  let responseMessage = ResponseMessage 0 1 [response]
   in 
   responseMessage 
