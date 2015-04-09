@@ -15,12 +15,6 @@ type PartitionStr = Int  -- TODO: better name (ambigious)
 
 type MessageInput = (TopicStr, PartitionStr, Log)
 
-isTopic :: Topic -> Bool
-isTopic s = True
-
-isPartition :: PartitionStr -> Bool
-isPartition p = True
-
 logFolder :: TopicStr -> PartitionStr -> String
 logFolder t p = t ++ "_" ++ show p
 
