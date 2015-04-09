@@ -4,7 +4,7 @@ module HMB.Internal.Handler (
 ) where 
 
 import Network.Socket 
-import qualified Network.Socket.ByteString.Lazy as SockBL
+import qualified Network.Socket.ByteString.Lazy as SBL
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BS
 
@@ -33,11 +33,11 @@ listenLoop sock =  do
 
 readReqFromSock :: (Socket, SockAddr) -> IO()
 readReqFromSock (sock, sockaddr) = do
-  input <- SockBL.recv sock 4096
+  input <- SBL.recv sock 4096
   let i  = input
   requestMessage <- readRequest i
   case rqApiKey requestMessage of
-    0  -> handleProduceRequest (request requestMessage) sock
+    0  -> handleProduceRequest (rqRequest requestMessage) sock
     1  -> putStrLn "FetchRequest"
     2  -> putStrLn "OffsetRequest"
     3  -> putStrLn "MetadataRequest"
@@ -59,11 +59,17 @@ packProduceResponse =
   let error = RsPrError 0 0 0 
   in
   let response = ProduceResponse 
-        BS.pack "topicHardCoded"
-        fromIntegral $ BS.length $ BS.pack "topicHardCoded"
-        1
+        (fromIntegral $ BS.length $ BS.pack "topicHardCoded")
+        (BS.pack "topicHardCoded")
+        (fromIntegral $ length [error])
         [error]
   in
   let responseMessage = ResponseMessage 0 1 [response]
   in 
   responseMessage 
+
+sendProduceResponse :: Socket -> ResponseMessage -> IO()
+sendProduceResponse socket responsemessage = do
+  let msg = buildPrResponseMessage responsemessage
+  SBL.sendAll socket msg
+
