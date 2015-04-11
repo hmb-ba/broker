@@ -91,10 +91,24 @@ requestLog req = mapM readLog [
       | x <- rqFtTopics req, y <- partitions x 
     ]
 
+
+packMsToFtRsPayload :: MessageSet -> RsFtPayload
+packMsToFtRsPayload ms = RsFtPayload 0 0 0 (fromIntegral $ len ms) ms
+
+packLogToFtRsPayload :: Log -> [RsFtPayload]
+packLogToFtRsPayload log = map packMsToFtRsPayload log
+
+packLogToFtRs :: Log -> Response
+packLogToFtRs log = FetchResponse
+        0
+        (BS.pack("testtopic"))
+        0
+        (packLogToFtRsPayload log)
+
 handleFetchRequest :: Request -> Socket -> IO()
 handleFetchRequest req sock = do
   logs <- requestLog req
-  --readLog (BS.unpack(topicName $ head $ rqFtTopics req)) 0
-  print ""
+  --let msg = buildFtRsMessage (ResponseMessage 0 0 $ packLogToFtRs logs)
+  --SBL.sendAll socket msg
   print "send resp"
 
