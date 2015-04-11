@@ -38,7 +38,7 @@ readReqFromSock (sock, sockaddr) = do
   requestMessage <- readRequest i
   case rqApiKey requestMessage of
     0  -> handleProduceRequest (rqRequest requestMessage) sock
-    1  -> putStrLn "FetchRequest"
+    1  -> handleFetchRequest (rqRequest requestMessage) sock
     2  -> putStrLn "OffsetRequest"
     3  -> putStrLn "MetadataRequest"
     8  -> putStrLn "OffsetCommitRequest"
@@ -48,9 +48,17 @@ readReqFromSock (sock, sockaddr) = do
   print requestMessage
   return ()
 
+
+-----------------
+-- ProduceRequest
+-----------------
+
 handleProduceRequest :: Request -> Socket -> IO()
 handleProduceRequest req sock = do
-  mapM writeLog [ (BS.unpack(rqPrTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) | x <- rqPrTopics req, y <- rqPrPartitions x ]
+  mapM writeLog [ 
+      (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
+      | x <- rqPrTopics req, y <- partitions x 
+    ]
   sendProduceResponse sock packProduceResponse 
 
 -- TODO dynamic function
@@ -72,4 +80,21 @@ sendProduceResponse :: Socket -> ResponseMessage -> IO()
 sendProduceResponse socket responsemessage = do
   let msg = buildPrResponseMessage responsemessage
   SBL.sendAll socket msg
+
+-----------------
+-- FetchRequest
+-----------------
+
+requestLog :: Request -> IO [Log]
+requestLog req = mapM readLog [
+      (BS.unpack(topicName x), fromIntegral(rqFtPartitionNumber y))
+      | x <- rqFtTopics req, y <- partitions x 
+    ]
+
+handleFetchRequest :: Request -> Socket -> IO()
+handleFetchRequest req sock = do
+  logs <- requestLog req
+  --readLog (BS.unpack(topicName $ head $ rqFtTopics req)) 0
+  print ""
+  print "send resp"
 

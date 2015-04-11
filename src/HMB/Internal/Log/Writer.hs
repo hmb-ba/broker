@@ -1,5 +1,5 @@
 module HMB.Internal.Log.Writer
-( writeLog ) where
+( writeLog, readLog ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
@@ -7,8 +7,9 @@ import Data.Binary.Put
 import System.Directory
 import Control.Conditional
 
-import Kafka.Protocol.Types
-import Kafka.Protocol.Serializer
+import Kafka.Protocol
+
+import Data.Binary.Get
 
 type TopicStr = String --TODO: better name (ambigious)
 type PartitionStr = Int  -- TODO: better name (ambigious)
@@ -37,3 +38,24 @@ writeLog (topicName, partitionNumber, log) = do
     (BL.appendFile filePath $ buildLog log)
     (BL.writeFile filePath $ buildLog log)
 
+
+-- todo: move to reader
+
+getLog :: Get Log
+getLog = do
+  empty <- isEmpty
+  if empty
+      then return []
+      else do messageSet <- messageSetParser
+              messageSets <- getLog
+              return (messageSet:messageSets)
+
+parseLog :: String -> IO Log
+parseLog a = do
+  input <- BL.readFile a
+  return (runGet getLog input)
+
+
+readLog :: (String, Int) -> IO Log
+readLog (t, p) = parseLog $ 
+    getPath (logFolder t p) (logFile 0)
