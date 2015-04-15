@@ -8,6 +8,7 @@ import System.Environment
 import qualified Data.ByteString.Lazy as BL
 import Control.Monad
 import Control.Concurrent.Async 
+import Control.Concurrent
 
 --HMB
 import Kafka.Protocol

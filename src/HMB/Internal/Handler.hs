@@ -30,7 +30,7 @@ listenLoop :: Socket -> IO()
 listenLoop sock =  do
   conn <- accept sock
   readReqFromSock conn
-  listenLoop sock
+  --listenLoop sock
 
 readReqFromSock :: (Socket, SockAddr) -> IO()
 readReqFromSock (sock, sockaddr) = do
@@ -100,16 +100,18 @@ packLogToFtRsPayload log = map packMsToFtRsPayload log
 
 packLogToFtRs :: Log -> Response
 packLogToFtRs log = FetchResponse
-        0
-        (BS.pack("testtopic"))
-        0
+        (fromIntegral $ BS.length $ BS.pack("myTopic"))
+        (BS.pack("myTopic"))
+        (fromIntegral $ length log)
         (packLogToFtRsPayload log)
 
 handleFetchRequest :: Request -> Socket -> IO()
 handleFetchRequest req sock = do
   logs <- requestLog req
   let rs = map packLogToFtRs logs
-  let msg = buildFtRsMessage (ResponseMessage 0 0 rs)
+  let rsms = ResponseMessage 0 1 rs
+  print rsms
+  let msg = buildFtRsMessage rsms
   SBL.sendAll sock msg
   print $ "send resp:" ++  show msg
 
