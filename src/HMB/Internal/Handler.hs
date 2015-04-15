@@ -16,6 +16,7 @@ import Control.Monad
 import Kafka.Protocol
 
 import HMB.Internal.Log
+import qualified Data.ByteString.Char8 as C
 
 initHandler :: IO Socket
 initHandler = do
@@ -110,5 +111,5 @@ handleFetchRequest req sock = do
   let rs = map packLogToFtRs logs
   let msg = buildFtRsMessage (ResponseMessage 0 0 rs)
   SBL.sendAll sock msg
-  print "send resp"
+  print $ "send resp:" ++  show msg
 
