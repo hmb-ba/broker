@@ -29,8 +29,9 @@ initHandler = do
 listenLoop :: Socket -> IO()
 listenLoop sock =  do
   conn <- accept sock
-  readReqFromSock conn
-  --listenLoop sock
+  forkIO $ forever $ do
+      readReqFromSock conn
+  listenLoop sock
 
 readReqFromSock :: (Socket, SockAddr) -> IO()
 readReqFromSock (sock, sockaddr) = do
@@ -48,7 +49,6 @@ readReqFromSock (sock, sockaddr) = do
     _  -> putStrLn "Unknown ApiKey"
   print requestMessage
   return ()
-
 
 -----------------
 -- ProduceRequest
