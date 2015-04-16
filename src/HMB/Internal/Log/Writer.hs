@@ -59,3 +59,5 @@ parseLog a = do
 readLog :: (String, Int) -> IO Log
 readLog (t, p) = parseLog $ 
     getPath (logFolder t p) (logFile 0)
+
+
