@@ -1,6 +1,7 @@
-module HMB.Internal.Handler (
-    initHandler, 
-    listenLoop
+module HMB.Internal.Handler 
+( readRequest
+, initHandler
+, listenLoop
 ) where 
 
 import Network.Socket 
@@ -14,9 +15,14 @@ import Control.Concurrent
 import Control.Monad
 
 import Kafka.Protocol
+import Data.Binary.Get
 
 import HMB.Internal.Log
 import qualified Data.ByteString.Char8 as C
+
+readRequest :: BL.ByteString -> IO RequestMessage
+readRequest a = do 
+  return (runGet requestMessageParser a)
 
 initHandler :: IO Socket
 initHandler = do
