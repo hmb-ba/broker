@@ -92,32 +92,29 @@ sendProduceResponse socket responsemessage = do
 -- FetchRequest
 -----------------
 
-requestLog :: Request -> IO [Log]
-requestLog req = mapM readLog [
-      (BS.unpack(topicName x), fromIntegral(rqFtPartitionNumber y))
-      | x <- rqFtTopics req, y <- partitions x 
-    ]
+packPartitionsToFtRsPayload :: TopicName -> Partition -> IO RsFtPayload
+packPartitionsToFtRsPayload t p = do
+    log <- readLog (BS.unpack $ t, fromIntegral $ rqFtPartitionNumber p, fromIntegral $ rqFtFetchOffset p)
+    return $ RsFtPayload
+        0
+        0
+        0
+        (fromIntegral $ BL.length $ foldl (\acc ms -> BL.append acc (buildMessageSet ms)) BL.empty log)
+        log
 
-packMsToFtRsPayload :: MessageSet -> RsFtPayload
-packMsToFtRsPayload ms = RsFtPayload 0 0 0 (fromIntegral $ len ms) ms
-
-packLogToFtRsPayload :: Log -> [RsFtPayload]
-packLogToFtRsPayload log = map packMsToFtRsPayload log
-
-packLogToFtRs :: Log -> Response
-packLogToFtRs log = FetchResponse
-        (fromIntegral $ BS.length $ BS.pack("myTopic"))
-        (BS.pack("myTopic"))
-        (fromIntegral $ length log)
-        (packLogToFtRsPayload log)
+packLogToFtRs :: Topic -> IO Response
+packLogToFtRs t = do
+    rss <- (mapM (packPartitionsToFtRsPayload $ topicName t) $ partitions t)
+    return $ FetchResponse
+        (topicNameLen t)
+        (topicName t)
+        (numPartitions t )
+        rss
 
 handleFetchRequest :: Request -> Socket -> IO()
 handleFetchRequest req sock = do
-  logs <- requestLog req
-  let rs = map packLogToFtRs logs
+  rs <- mapM packLogToFtRs (rqFtTopics req)
   let rsms = ResponseMessage 0 1 rs
-  print rsms
   let msg = buildFtRsMessage rsms
   SBL.sendAll sock msg
-  print $ "send resp:" ++  show msg
 

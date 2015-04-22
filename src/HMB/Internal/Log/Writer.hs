@@ -6,7 +6,7 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Put
 import System.Directory
 import Control.Conditional
-
+import Control.Monad
 import Kafka.Protocol
 
 import Data.Binary.Get
@@ -25,22 +25,45 @@ logFile o = (show $ fromIntegral o) ++ ".log"
 getPath :: String -> String -> String
 getPath folder file = folder ++ "/" ++ file
 
-buildLog :: Log -> BL.ByteString
-buildLog [] = BL.empty
-buildLog (x:xs) = 
-  BL.append (buildMessageSet x) (buildLog xs) 
+buildLog :: Offset -> Log -> BL.ByteString
+buildLog o [] = BL.empty
+buildLog o (x:xs) =
+  (BL.append (buildLogEntry x o) (buildLog (o + 1) xs))
 
 writeLog :: MessageInput -> IO() 
 writeLog (topicName, partitionNumber, log) = do
   createDirectoryIfMissing False $ logFolder topicName partitionNumber
   let filePath = getPath (logFolder topicName partitionNumber) (logFile 0)
   ifM (doesFileExist filePath) 
-    (BL.appendFile filePath $ buildLog log)
-    (BL.writeFile filePath $ buildLog log)
+      (appendToLog filePath (topicName,partitionNumber, log)) 
+      (newLog filePath (topicName,partitionNumber, log))
+
+appendToLog :: String -> MessageInput -> IO() 
+appendToLog filepath (t, p, log)  = do 
+  o <- getMaxOffsetOfLog (t, p, log)
+  print o  --TODO: is needed for preventing file lock ...
+  let l =  buildLog (o + 1) log
+  BL.appendFile filepath l
+  return ()
+
+newLog :: String -> MessageInput -> IO()
+newLog filepath (t, p, log) = do 
+  let l = buildLog 0 log
+  BL.writeFile filepath l
+  return ()
+
+maxOffset :: [Offset] -> Offset 
+maxOffset [x] = x
+maxOffset (x:xs) = max x (maxOffset xs)
+
+getMaxOffsetOfLog :: MessageInput -> IO Offset
+getMaxOffsetOfLog (t, p, _) = do 
+  log <- readLogFromBeginning (t,p) --TODO: optimieren, dass nich gesamter log gelesen werden muss 
+  return (maxOffset $ [ offset x | x <- log ])
+
 
 
 -- todo: move to reader
-
 getLog :: Get Log
 getLog = do
   empty <- isEmpty
@@ -55,7 +78,11 @@ parseLog a = do
   input <- BL.readFile a
   return (runGet getLog input)
 
-
-readLog :: (String, Int) -> IO Log
-readLog (t, p) = parseLog $ 
+readLogFromBeginning :: (String, Int) -> IO Log
+readLogFromBeginning (t, p) = parseLog $ 
     getPath (logFolder t p) (logFile 0)
+
+readLog :: (String, Int, Int) -> IO Log
+readLog (t, p, o) = do 
+  log <- readLogFromBeginning (t,p)
+  return ([ x | x <- log, fromIntegral(offset x) >= o])
