@@ -38,6 +38,8 @@ readReqFromSock (sock, sockaddr) = do
   input <- SBL.recv sock 4096
   let i  = input
   requestMessage <- readRequest i
+  -- Error Handling: Parser Error: no response 
+  -- Validation Request 
   case rqApiKey requestMessage of
     0  -> handleProduceRequest (rqRequest requestMessage) sock
     1  -> handleFetchRequest (rqRequest requestMessage) sock
@@ -60,6 +62,7 @@ handleProduceRequest req sock = do
       (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
       | x <- rqPrTopics req, y <- partitions x 
     ]
+    -- Error Handling: Error: -1 ErroCode Success: 0 ErrorCode 
   sendProduceResponse sock packProduceResponse 
 
 -- TODO dynamic function
