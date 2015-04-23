@@ -18,11 +18,14 @@ import Kafka.Protocol
 import Data.Binary.Get
 
 import HMB.Internal.Log
-import qualified Data.ByteString.Char8 as C
+import qualified Data.ByteString.Lazy.Char8 as C
+import Control.Exception
 
-readRequest :: BL.ByteString -> IO RequestMessage
-readRequest a = do 
-  return (runGet requestMessageParser a)
+readRequest :: BL.ByteString -> RequestMessage
+readRequest a = runGet requestMessageParser a
+
+readRequest' :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
+readRequest' a = runGetOrFail requestMessageParser a
 
 initHandler :: IO Socket
 initHandler = do
@@ -36,24 +39,29 @@ listenLoop :: Socket -> IO()
 listenLoop sock =  do
   conn <- accept sock
   forkIO $ forever $ do
+      print "before"
       readReqFromSock conn
+      print "after"
   listenLoop sock
 
 readReqFromSock :: (Socket, SockAddr) -> IO()
 readReqFromSock (sock, sockaddr) = do
   input <- SBL.recv sock 4096
-  let i  = input
-  requestMessage <- readRequest i
-  case rqApiKey requestMessage of
-    0  -> handleProduceRequest (rqRequest requestMessage) sock
-    1  -> handleFetchRequest (rqRequest requestMessage) sock
-    2  -> putStrLn "OffsetRequest"
-    3  -> putStrLn "MetadataRequest"
-    8  -> putStrLn "OffsetCommitRequest"
-    9  -> putStrLn "OffsetFetchRequest"
-    10 -> putStrLn "ConsumerMetadataRequest"
-    _  -> putStrLn "Unknown ApiKey"
-  print requestMessage
+  case (readRequest' input) of
+    Left (bs, bo, e) -> do
+        putStrLn $ "[ParseError]" ++  e
+        SBL.sendAll sock $ C.pack e
+    Right (bs, bo, rm) -> 
+  --let rm = readRequest input
+      case rqApiKey rm of
+          0  -> handleProduceRequest (rqRequest rm) sock
+          1  -> handleFetchRequest (rqRequest rm) sock
+          2  -> putStrLn "OffsetRequest"
+          3  -> putStrLn "MetadataRequest"
+          8  -> putStrLn "OffsetCommitRequest"
+          9  -> putStrLn "OffsetFetchRequest"
+          10 -> putStrLn "ConsumerMetadataRequest"
+          _  -> putStrLn "Unknown ApiKey"
   return ()
 
 -----------------
