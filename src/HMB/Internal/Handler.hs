@@ -21,11 +21,8 @@ import HMB.Internal.Log
 import qualified Data.ByteString.Lazy.Char8 as C
 import Control.Exception
 
-readRequest :: BL.ByteString -> RequestMessage
-readRequest a = runGet requestMessageParser a
-
-readRequest' :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
-readRequest' a = runGetOrFail requestMessageParser a
+readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
+readRequest a = runGetOrFail requestMessageParser a
 
 initHandler :: IO Socket
 initHandler = do
@@ -39,15 +36,13 @@ listenLoop :: Socket -> IO()
 listenLoop sock =  do
   conn <- accept sock
   forkIO $ forever $ do
-      print "before"
       readReqFromSock conn
-      print "after"
   listenLoop sock
 
 readReqFromSock :: (Socket, SockAddr) -> IO()
 readReqFromSock (sock, sockaddr) = do
   input <- SBL.recv sock 4096
-  case (readRequest' input) of
+  case (readRequest input) of
     Left (bs, bo, e) -> do
         putStrLn $ "[ParseError]" ++  e
         SBL.sendAll sock $ C.pack e
@@ -74,7 +69,14 @@ handleProduceRequest req sock = do
       (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
       | x <- rqPrTopics req, y <- partitions x 
     ]
-  sendProduceResponse sock packProduceResponse 
+  -- meanwhile (between rq and rs) client can disconnect
+  -- therefore broker would still send response since disconnection is not retrieved
+  forkIO $ catch(sendProduceResponse sock packProduceResponse )
+    (\e -> do let err = show (e :: IOException)
+              putStrLn $ ("Socket error: " ++ err)
+              return ()
+    )
+  return ()
 
 -- TODO dynamic function
 packProduceResponse :: ResponseMessage 
@@ -92,9 +94,8 @@ packProduceResponse =
   responseMessage 
 
 sendProduceResponse :: Socket -> ResponseMessage -> IO()
-sendProduceResponse socket responsemessage = do
-  let msg = buildPrResponseMessage responsemessage
-  SBL.sendAll socket msg
+sendProduceResponse socket responsemessage = SBL.sendAll socket $ buildPrResponseMessage responsemessage
+
 
 -----------------
 -- FetchRequest
