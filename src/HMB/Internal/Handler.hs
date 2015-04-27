@@ -19,7 +19,47 @@ import Data.Binary.Get
 
 import HMB.Internal.Log
 import qualified Data.ByteString.Lazy.Char8 as C
+
 import Control.Exception
+import Prelude hiding (catch)
+
+---------------
+-- error types
+---------------
+
+data ErrorCode =
+        NoError
+      | Unknown
+      | OffsetOutOfRange
+      | InvalidMessage
+      | UnknownTopicOrPartition
+      | InvalidMessageSize
+      | LeaderNotAvailable
+      | NotLeaderForPartition
+      | RequestTimedOut
+      | BrokerNotAvailable
+      | ReplicaNotAvailable
+      | MessageSizeTooLarge
+      | StaleControllerEpochCode
+      | OffsetMetadataTooLargeCode
+      | OffsetsLoadInProgressCode
+      | ConsumerCoordinatorNotAvailableCode
+      | NotCoordinatorForConsumerCodeA
+        deriving Show
+
+data SocketError =
+        SocketRecvError String
+      | SocketSendError String
+        deriving Show
+
+
+data HandleError =
+        ParseRequestError String
+      | PrError
+      | FtError
+        deriving Show
+
+---------------
 
 readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
 readRequest a = runGetOrFail requestMessageParser a
@@ -36,19 +76,38 @@ listenLoop :: Socket -> IO()
 listenLoop sock =  do
   conn <- accept sock
   forkIO $ forever $ do
-      readReqFromSock conn
+    r <- recvFromSock conn
+    case (r) of
+      Left e -> handleSocketError sock e
+      Right i -> do 
+        case readReq sock i of
+          Left e -> putStrLn $ show e
+          Right io -> io
   listenLoop sock
 
-readReqFromSock :: (Socket, SockAddr) -> IO()
-readReqFromSock (sock, sockaddr) = do
-  input <- SBL.recv sock 4096
-  case (readRequest input) of
-    Left (bs, bo, e) -> do
-        putStrLn $ "[ParseError]" ++  e
-        SBL.sendAll sock $ C.pack e
-    Right (bs, bo, rm) -> 
-  --let rm = readRequest input
-      case rqApiKey rm of
+handleSocketError :: Socket -> SocketError -> IO()
+handleSocketError sock e = do
+  putStrLn $ show e
+  SBL.sendAll sock $ C.pack $ show e
+
+handleHandleError :: Socket -> HandleError -> IO()
+handleHandleError sock e = do
+  -- central point to create response for each type of handle error
+  return ()
+
+recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
+recvFromSock (sock, sockaddr) =
+  do r <- try (SBL.recv sock 4096) :: IO (Either SomeException BL.ByteString)
+     case r of
+       Left e -> return $ Left $ SocketRecvError $ show e
+       Right bs -> return $ Right bs
+
+readReq :: Socket -> BL.ByteString -> Either HandleError (IO())
+readReq sock input = do
+  case readRequest input of
+    Left (bs, bo, e) -> Left $ ParseRequestError e
+    Right (bs, bo, rm) -> Right $
+        case rqApiKey rm of
           0  -> handleProduceRequest (rqRequest rm) sock
           1  -> handleFetchRequest (rqRequest rm) sock
           2  -> putStrLn "OffsetRequest"
@@ -57,7 +116,6 @@ readReqFromSock (sock, sockaddr) = do
           9  -> putStrLn "OffsetFetchRequest"
           10 -> putStrLn "ConsumerMetadataRequest"
           _  -> putStrLn "Unknown ApiKey"
-  return ()
 
 -----------------
 -- ProduceRequest
@@ -71,7 +129,7 @@ handleProduceRequest req sock = do
     ]
   -- meanwhile (between rq and rs) client can disconnect
   -- therefore broker would still send response since disconnection is not retrieved
-  forkIO $ catch(sendProduceResponse sock packProduceResponse )
+  catch(sendProduceResponse sock packProduceResponse )
     (\e -> do let err = show (e :: IOException)
               putStrLn $ ("Socket error: " ++ err)
               return ()
