@@ -1,5 +1,5 @@
 module HMB.Internal.Handler 
-( readRequest
+( handleRequest
 , initHandler
 , listenLoop
 ) where 
@@ -78,21 +78,21 @@ listenLoop sock =  do
   forkIO $ forever $ do
     r <- recvFromSock conn
     case (r) of
-      Left e -> handleSocketError sock e
+      Left e -> handleSocketError conn e
       Right i -> do 
         print i
-        case handleRequest sock i of
+        case handleRequest conn i of
           Left e -> putStrLn $ show e
           Right io -> io
   listenLoop sock
 
-handleSocketError :: Socket -> SocketError -> IO()
-handleSocketError sock e = do
+handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
+handleSocketError (sock, sockaddr) e = do
   putStrLn $ show e
   SBL.sendAll sock $ C.pack $ show e
 
-handleHandleError :: Socket -> HandleError -> IO()
-handleHandleError sock e = do
+handleHandleError :: (Socket, SockAddr) -> HandleError -> IO()
+handleHandleError (sock, sockaddr) e = do
   -- central point to create response for each type of handle error
   return ()
 
@@ -103,8 +103,8 @@ recvFromSock (sock, sockaddr) =
        Left e -> return $ Left $ SocketRecvError $ show e
        Right bs -> return $ Right bs
 
-handleReqest :: Socket -> BL.ByteString -> Either HandleError (IO())
-handleRequest sock input = do
+handleRequest :: (Socket, SockAddr) -> BL.ByteString -> Either HandleError (IO())
+handleRequest (sock, sockaddr) input = do
   case readRequest input of
     Left (bs, bo, e) -> Left $ ParseRequestError e
     Right (bs, bo, rm) -> Right $
