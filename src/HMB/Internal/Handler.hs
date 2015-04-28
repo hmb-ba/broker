@@ -55,8 +55,8 @@ data SocketError =
 
 data HandleError =
         ParseRequestError String
-      | PrError
-      | FtError
+      | PrError String
+      | FtError String
         deriving Show
 
 ---------------
@@ -107,35 +107,33 @@ handleRequest :: (Socket, SockAddr) -> BL.ByteString -> Either HandleError (IO()
 handleRequest (sock, sockaddr) input = do
   case readRequest input of
     Left (bs, bo, e) -> Left $ ParseRequestError e
-    Right (bs, bo, rm) -> Right $
-        case rqApiKey rm of
+    Right (bs, bo, rm) -> do
+        x <- case rqApiKey rm of
           0  -> handleProduceRequest (rqRequest rm) sock
           1  -> handleFetchRequest (rqRequest rm) sock
-          2  -> putStrLn "OffsetRequest"
-          3  -> putStrLn "MetadataRequest"
-          8  -> putStrLn "OffsetCommitRequest"
-          9  -> putStrLn "OffsetFetchRequest"
-          10 -> putStrLn "ConsumerMetadataRequest"
-          _  -> putStrLn "Unknown ApiKey"
+          2  -> Right $ putStrLn "OffsetRequest"
+          3  -> Right $ putStrLn "MetadataRequest"
+          8  -> Right $ putStrLn "OffsetCommitRequest"
+          9  -> Right $ putStrLn "OffsetFetchRequest"
+          10 -> Right $ putStrLn "ConsumerMetadataRequest"
+          _  -> Right $ putStrLn "Unknown ApiKey"
+        return x
 
 -----------------
 -- ProduceRequest
 -----------------
 
-handleProduceRequest :: Request -> Socket -> IO()
+handleProduceRequest :: Request -> Socket -> Either HandleError (IO())
 handleProduceRequest req sock = do
-  mapM writeLog [ 
+  Right $ mapM writeLog [ 
       (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
       | x <- rqPrTopics req, y <- partitions x 
     ]
   -- meanwhile (between rq and rs) client can disconnect
   -- therefore broker would still send response since disconnection is not retrieved
-  forkIO $ catch(sendProduceResponse sock packProduceResponse )
-    (\e -> do let err = show (e :: IOException)
-              putStrLn $ ("Socket error: " ++ err)
-              return ()
-    )
-  return ()
+  --return $ catch
+  Right (sendProduceResponse sock packProduceResponse)
+  --  (\(SomeException e) -> PrError $ show (e :: IOException))
 
 -- TODO dynamic function
 packProduceResponse :: ResponseMessage 
@@ -179,10 +177,9 @@ packLogToFtRs t = do
         (numPartitions t )
         rss
 
-handleFetchRequest :: Request -> Socket -> IO()
+handleFetchRequest :: Request -> Socket -> Either HandleError (IO())
 handleFetchRequest req sock = do
-  rs <- mapM packLogToFtRs (rqFtTopics req)
-  let rsms = ResponseMessage 0 1 rs
-  let msg = buildFtRsMessage rsms
-  SBL.sendAll sock msg
+  let rsms = liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req)
+  let msg = liftM buildFtRsMessage rsms
+  Right $ join $ liftM (SBL.sendAll sock) msg
 
