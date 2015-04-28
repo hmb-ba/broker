@@ -80,7 +80,8 @@ listenLoop sock =  do
     case (r) of
       Left e -> handleSocketError sock e
       Right i -> do 
-        case readReq sock i of
+        print i
+        case handleRequest sock i of
           Left e -> putStrLn $ show e
           Right io -> io
   listenLoop sock
@@ -102,8 +103,8 @@ recvFromSock (sock, sockaddr) =
        Left e -> return $ Left $ SocketRecvError $ show e
        Right bs -> return $ Right bs
 
-readReq :: Socket -> BL.ByteString -> Either HandleError (IO())
-readReq sock input = do
+handleReqest :: Socket -> BL.ByteString -> Either HandleError (IO())
+handleRequest sock input = do
   case readRequest input of
     Left (bs, bo, e) -> Left $ ParseRequestError e
     Right (bs, bo, rm) -> Right $
@@ -129,7 +130,7 @@ handleProduceRequest req sock = do
     ]
   -- meanwhile (between rq and rs) client can disconnect
   -- therefore broker would still send response since disconnection is not retrieved
-  catch(sendProduceResponse sock packProduceResponse )
+  forkIO $ catch(sendProduceResponse sock packProduceResponse )
     (\e -> do let err = show (e :: IOException)
               putStrLn $ ("Socket error: " ++ err)
               return ()
