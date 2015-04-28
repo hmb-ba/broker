@@ -82,7 +82,7 @@ listenLoop sock =  do
       Right i -> do 
         print i
         case handleRequest conn i of
-          Left e -> putStrLn $ show e
+          Left e -> handleHandleError conn e
           Right io -> io
   listenLoop sock
 
@@ -90,11 +90,16 @@ handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
 handleSocketError (sock, sockaddr) e = do
   putStrLn $ show e
   SBL.sendAll sock $ C.pack $ show e
+  sClose sock
 
 handleHandleError :: (Socket, SockAddr) -> HandleError -> IO()
 handleHandleError (sock, sockaddr) e = do
+  putStrLn $ show e
+  SBL.sendAll sock $ C.pack $ show e
+  sClose sock
   -- central point to create response for each type of handle error
-  return ()
+  -- e case of 
+  -- | SomeError -> ... 
 
 recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
 recvFromSock (sock, sockaddr) =
