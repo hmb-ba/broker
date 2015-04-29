@@ -7,7 +7,7 @@ import System.IO
 import System.Environment
 import qualified Data.ByteString.Lazy as BL
 import Control.Monad
-import Control.Concurrent.Async 
+import Control.Concurrent.Async
 import Control.Concurrent
 
 --HMB
@@ -17,7 +17,7 @@ import HMB.Internal.Handler
 
 main = do
   --parseLogData
-  
+
   sock <- initHandler
   forever $ do
     listenLoop sock
@@ -27,7 +27,7 @@ main = do
 
   --sendNetworkData
 
---parseLogData = do 
+--parseLogData = do
   --file <- getArgs
   --log <- parseLog $ head file
   --print log
