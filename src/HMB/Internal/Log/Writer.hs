@@ -9,6 +9,8 @@ import Control.Conditional
 import Control.Monad
 import Kafka.Protocol
 
+import HMB.Internal.Types
+
 import Data.Binary.Get
 
 type TopicStr = String --TODO: better name (ambigious)
@@ -32,6 +34,7 @@ buildLog o (x:xs) =
 
 writeLog :: MessageInput -> IO() 
 writeLog (topicName, partitionNumber, log) = do
+  putStrLn "here"
   createDirectoryIfMissing False $ logFolder topicName partitionNumber
   let filePath = getPath (logFolder topicName partitionNumber) (logFile 0)
   ifM (doesFileExist filePath) 

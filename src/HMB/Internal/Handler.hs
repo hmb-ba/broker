@@ -18,6 +18,7 @@ import Kafka.Protocol
 import Data.Binary.Get
 
 import HMB.Internal.Log
+import HMB.Internal.Types
 import qualified Data.ByteString.Lazy.Char8 as C
 
 import Control.Exception
@@ -50,13 +51,6 @@ data ErrorCode =
 data SocketError =
         SocketRecvError String
       | SocketSendError String
-        deriving Show
-
-
-data HandleError =
-        ParseRequestError String
-      | PrError String
-      | FtError String
         deriving Show
 
 ---------------
@@ -130,10 +124,10 @@ handleRequest (sock, sockaddr) input = do
 
 handleProduceRequest :: Request -> Socket -> Either HandleError (IO())
 handleProduceRequest req sock = do
-  Right $ mapM writeLog [ 
+  return $ mapM writeLog [ 
       (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
       | x <- rqPrTopics req, y <- partitions x 
-    ]
+                         ]
   -- meanwhile (between rq and rs) client can disconnect
   -- therefore broker would still send response since disconnection is not retrieved
   --return $ catch
