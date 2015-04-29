@@ -25,7 +25,6 @@ import Prelude hiding (catch)
 
 import Control.Monad.Error
 import System.IO.Error
-import System.IO.Unsafe
 
 ---------------
 -- error types
@@ -86,11 +85,10 @@ listenLoop sock =  do
       Left e -> handleSocketError conn e
       Right i -> do 
         print i
-        case handleRequest conn i of
+        handle <- handleRequest conn i
+        case handle of
           Left e -> handleHandleError conn e
-          Right bs -> do 
-                      res <- bs
-                      sendResponse conn res
+          Right bs -> sendResponse conn bs
   listenLoop sock
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
@@ -118,12 +116,12 @@ recvFromSock (sock, sockaddr) =
 sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO()
 sendResponse (socket, addr) responsemessage = SBL.sendAll socket $ responsemessage
 
-handleRequest :: (Socket, SockAddr) -> BL.ByteString -> Either HandleError (IO BL.ByteString)
+handleRequest :: (Socket, SockAddr) -> BL.ByteString -> IO (Either HandleError BL.ByteString)
 handleRequest (sock, sockaddr) input = do
   case readRequest input of
-    Left (bs, bo, e) -> Left $ ParseRequestError e
+    Left (bs, bo, e) -> return $ Left $ ParseRequestError e
     Right (bs, bo, rm) -> do
-        x <- case rqApiKey rm of
+        handle <- case rqApiKey rm of
           0  -> handleProduceRequest (rqRequest rm)
           1  -> handleFetchRequest (rqRequest rm) sock
           --2  -> Right $ putStrLn "OffsetRequest"
@@ -132,22 +130,22 @@ handleRequest (sock, sockaddr) input = do
           --9  -> Right $ putStrLn "OffsetFetchRequest"
           --10 -> Right $ putStrLn "ConsumerMetadataRequest"
           --_  -> Right $ putStrLn "Unknown ApiKey"
-        return x
+        return handle
 
 -----------------
 -- ProduceRequest
 -----------------
 
-handleProduceRequest :: Request ->  Either HandleError (IO BL.ByteString)
+handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
-  let w = unsafePerformIO $ tryIOError( mapM writeLog [ 
+  w <- tryIOError( mapM writeLog [ 
                     (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
                     | x <- rqPrTopics req, y <- partitions x 
                           ]
           )
   case w of
-      Left e -> Left $ PrWriteLogError 0 "hoi"
-      Right r -> return $ return $ buildPrResponseMessage packProduceResponse
+      Left e -> return $ Left $ PrWriteLogError 0 "todo"
+      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
 
 
 packProduceResponse :: ResponseMessage 
@@ -187,9 +185,10 @@ packLogToFtRs t = do
         (numPartitions t )
         rss
 
-handleFetchRequest :: Request -> Socket -> Either HandleError (IO BL.ByteString)
+handleFetchRequest :: Request -> Socket -> IO (Either HandleError BL.ByteString)
 handleFetchRequest req sock = do
   let rsms = liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req)
   let msg = liftM buildFtRsMessage rsms
-  Right msg
+  m <- msg
+  return $ Right m
 
