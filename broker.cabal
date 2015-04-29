@@ -23,7 +23,8 @@ library
     directory >= 1.2,
     cond >= 0.4, 
     digest >= 0.0.1.2,
-    kafka-protocol -any
+    kafka-protocol -any,
+    mtl -any
 executable broker
   main-is:             HMB/Main.hs
   -- other-modules:       
@@ -37,6 +38,7 @@ executable broker
     cond >= 0.4,
     directory >= 1.2,
     digest >= 0.0.1.2,
-    kafka-protocol -any
+    kafka-protocol -any,
+    mtl -any
   hs-source-dirs:      src
   default-language:    Haskell2010

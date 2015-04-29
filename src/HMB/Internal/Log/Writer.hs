@@ -9,9 +9,14 @@ import Control.Conditional
 import Control.Monad
 import Kafka.Protocol
 
-import HMB.Internal.Types
-
 import Data.Binary.Get
+
+import HMB.Internal.Types
+import Control.Exception
+import System.IO.Error -- IOError
+import GHC.IO.Exception -- IOError Types 
+import Control.Monad.Error
+
 
 type TopicStr = String --TODO: better name (ambigious)
 type PartitionStr = Int  -- TODO: better name (ambigious)
@@ -34,12 +39,18 @@ buildLog o (x:xs) =
 
 writeLog :: MessageInput -> IO() 
 writeLog (topicName, partitionNumber, log) = do
-  putStrLn "here"
   createDirectoryIfMissing False $ logFolder topicName partitionNumber
   let filePath = getPath (logFolder topicName partitionNumber) (logFile 0)
   ifM (doesFileExist filePath) 
       (appendToLog filePath (topicName,partitionNumber, log)) 
       (newLog filePath (topicName,partitionNumber, log))
+
+writeLogOrFail :: MessageInput -> IO(Either String ())
+writeLogOrFail input = do
+ r <- tryIOError(writeLog input)
+ case r of 
+    Left e -> return $ Left $ show e 
+    Right io -> return $ Right io 
 
 appendToLog :: String -> MessageInput -> IO() 
 appendToLog filepath (t, p, log)  = do 

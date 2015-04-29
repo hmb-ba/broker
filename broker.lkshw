@@ -1,0 +1,10 @@
+Version of workspace file format:
+               1
+Time of storage:
+               "Tue Apr 28 00:05:07 CEST 2015"
+Name of the workspace:
+               "broker"
+File paths of contained packages:
+               ["cabal.sandbox.config","broker.cabal"]
+Maybe file path of an active package:
+               Just "broker.cabal"

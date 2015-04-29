@@ -1,0 +1,18 @@
+Version of session file format:
+               1
+Time of storage:
+               "Tue Apr 28 00:05:40 CEST 2015"
+Layout:        VerticalP (TerminalP {paneGroups = fromList [], paneTabs = Just TopP, currentPage = 0, detachedId = Nothing, detachedSize = Nothing}) (HorizontalP (TerminalP {paneGroups = fromList [("Browser",HorizontalP (TerminalP {paneGroups = fromList [], paneTabs = Nothing, currentPage = 0, detachedId = Nothing, detachedSize = Nothing}) (HorizontalP (TerminalP {paneGroups = fromList [], paneTabs = Nothing, currentPage = 0, detachedId = Nothing, detachedSize = Nothing}) (TerminalP {paneGroups = fromList [], paneTabs = Nothing, currentPage = 0, detachedId = Nothing, detachedSize = Nothing}) 172) 98),("Debug",HorizontalP (TerminalP {paneGroups = fromList [], paneTabs = Nothing, currentPage = 0, detachedId = Nothing, detachedSize = Nothing}) (TerminalP {paneGroups = fromList [], paneTabs = Just TopP, currentPage = 0, detachedId = Nothing, detachedSize = Nothing}) 130)], paneTabs = Just BottomP, currentPage = 0, detachedId = Nothing, detachedSize = Nothing}) (TerminalP {paneGroups = fromList [], paneTabs = Nothing, currentPage = 0, detachedId = Nothing, detachedSize = Nothing}) 356) 643
+Population:    [(Just (BreakpointsSt BreakpointsState),[SplitP RightP,SplitP TopP,GroupP "Debug",SplitP BottomP]),(Just (ErrorsSt ErrorsState),[SplitP RightP,SplitP TopP]),(Just (FilesSt FilesState),[SplitP RightP,SplitP TopP]),(Just (InfoSt (InfoState Nothing)),[SplitP RightP,SplitP TopP,GroupP "Browser",SplitP BottomP,SplitP BottomP]),(Just (LogSt LogState),[SplitP RightP,SplitP BottomP]),(Just (BufferSt (BufferState "/home/marc/Public/ba/broker/src/HMB/Main.hs" 581)),[SplitP LeftP]),(Just (ModulesSt (ModulesState 286 (PackageScope False,False) (Nothing,Nothing) (ExpanderState {packageExp = ([],[]), packageExpNoBlack = ([],[]), packageDExp = ([],[]), packageDExpNoBlack = ([],[]), workspaceExp = ([],[]), workspaceExpNoBlack = ([],[]), workspaceDExp = ([],[]), workspaceDExpNoBlack = ([],[]), systemExp = ([],[]), systemExpNoBlack = ([],[])}))),[SplitP RightP,SplitP TopP,GroupP "Browser",SplitP BottomP,SplitP TopP]),(Just (TraceSt TraceState),[SplitP RightP,SplitP TopP,GroupP "Debug",SplitP BottomP]),(Just (VariablesSt VariablesState),[SplitP RightP,SplitP TopP,GroupP "Debug",SplitP BottomP]),(Just (WorkspaceSt WorkspaceState),[SplitP RightP,SplitP TopP,GroupP "Browser",SplitP TopP]),(Just (BufferSt (BufferStateTrans "_Eval.hs" "\n" 1)),[SplitP RightP,SplitP TopP,GroupP "Debug",SplitP TopP])]
+Window size:   (1280,702)
+Completion size:
+               (750,400)
+Workspace:     Just "/home/marc/Public/ba/broker/broker.lkshw"
+Active pane:   Just "Workspace"
+Toolbar visible:
+               True
+FindbarState:  (True,FindState {entryStr = "", entryHist = [""], replaceStr = "", replaceHist = [], caseSensitive = False, entireWord = False, wrapAround = False, regex = False, lineNr = 1})
+Recently opened files:
+               ["/home/marc/Public/ba/broker/broker.cabal","/home/marc/Public/ba/broker/src/HMB/Main.hs","/home/marc/.leksah-0.12/leksah-welcome/src/Main.hs"]
+Recently opened workspaces:
+               ["/home/marc/Public/ba/protocol/protocol.lkshw","/home/marc/Public/ba/broker/broker.lkshw","/home/marc/leksah.lkshw"]
