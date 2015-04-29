@@ -23,7 +23,9 @@ import qualified Data.ByteString.Lazy.Char8 as C
 import Control.Exception
 import Prelude hiding (catch)
 
---import Control.Monad.Error
+import Control.Monad.Error
+import System.IO.Error
+import System.IO.Unsafe
 
 ---------------
 -- error types
@@ -113,6 +115,9 @@ recvFromSock (sock, sockaddr) =
        Left e -> return $ Left $ SocketRecvError $ show e
        Right bs -> return $ Right bs
 
+sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO()
+sendResponse (socket, addr) responsemessage = SBL.sendAll socket $ responsemessage
+
 handleRequest :: (Socket, SockAddr) -> BL.ByteString -> Either HandleError (IO BL.ByteString)
 handleRequest (sock, sockaddr) input = do
   case readRequest input of
@@ -135,23 +140,16 @@ handleRequest (sock, sockaddr) input = do
 
 handleProduceRequest :: Request ->  Either HandleError (IO BL.ByteString)
 handleProduceRequest req = do
-  --w <- liftIO $ tryIOError( mapM writeLog [ 
-  --                  (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
-  --                  | x <- rqPrTopics req, y <- partitions x 
-  --                        ]
-  --        )
-  --case w of
-  --    Left e -> Left $ PrWriteLogError 0 "hoi"
-  --    Right -> return $ buildPrResponseMessage packProduceResponse
+  let w = unsafePerformIO $ tryIOError( mapM writeLog [ 
+                    (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
+                    | x <- rqPrTopics req, y <- partitions x 
+                          ]
+          )
+  case w of
+      Left e -> Left $ PrWriteLogError 0 "hoi"
+      Right r -> return $ return $ buildPrResponseMessage packProduceResponse
 
-  -- meanwhile (between rq and rs) client can disconnect
-  -- therefore broker would still send response since disconnection is not retrieved
-  --return $ catch
-  --Right $ return $ buildPrResponseMessage packProduceResponse
-  --  (\(SomeException e) -> PrError $ show (e :: IOException))
-  return $ return $ buildPrResponseMessage packProduceResponse 
 
--- TODO dynamic function
 packProduceResponse :: ResponseMessage 
 packProduceResponse = 
   let error = RsPrError 0 0 0 
@@ -163,11 +161,8 @@ packProduceResponse =
         [error]
   in
   let responseMessage = ResponseMessage 0 1 [response]
-  in 
+  in
   responseMessage 
-
-sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO()
-sendResponse (socket, addr) responsemessage = SBL.sendAll socket $ responsemessage
 
 -----------------
 -- FetchRequest

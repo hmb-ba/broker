@@ -11,7 +11,6 @@ import Kafka.Protocol
 
 import Data.Binary.Get
 
-import HMB.Internal.Types
 import Control.Exception
 import System.IO.Error -- IOError
 import GHC.IO.Exception -- IOError Types 
