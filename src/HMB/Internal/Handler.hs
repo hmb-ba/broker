@@ -87,7 +87,7 @@ listenLoop sock =  do
         print i
         handle <- handleRequest conn i
         case handle of
-          Left e -> handleHandleError conn e
+          Left e -> handleHandlerError conn e
           Right bs -> sendResponse conn bs
   listenLoop sock
 
@@ -97,14 +97,16 @@ handleSocketError (sock, sockaddr) e = do
   SBL.sendAll sock $ C.pack $ show e
   sClose sock
 
-handleHandleError :: (Socket, SockAddr) -> HandleError -> IO()
-handleHandleError (sock, sockaddr) e = do
+handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
+handleHandlerError (s, a) (ParseRequestError e) = do
+    putStrLn $ (show "[ParseError]: ") ++ e
+    sClose s
+handleHandlerError (s, a) (PrWriteLogError o e) = do
+    putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
+handleHandlerError (s, a) e = do
   putStrLn $ show e
-  SBL.sendAll sock $ C.pack $ show e
-  sClose sock
-  -- central point to create response for each type of handle error
-  -- e case of 
-  -- | SomeError -> ... 
+  SBL.sendAll s $ C.pack $ show e
+  sClose s
 
 recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
 recvFromSock (sock, sockaddr) =
