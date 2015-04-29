@@ -18,11 +18,12 @@ import Kafka.Protocol
 import Data.Binary.Get
 
 import HMB.Internal.Log
-import HMB.Internal.Types
 import qualified Data.ByteString.Lazy.Char8 as C
 
 import Control.Exception
 import Prelude hiding (catch)
+
+--import Control.Monad.Error
 
 ---------------
 -- error types
@@ -46,12 +47,20 @@ data ErrorCode =
       | OffsetsLoadInProgressCode
       | ConsumerCoordinatorNotAvailableCode
       | NotCoordinatorForConsumerCodeA
-        deriving Show
+        deriving (Show, Enum)
 
 data SocketError =
         SocketRecvError String
       | SocketSendError String
         deriving Show
+
+data HandleError =
+        ParseRequestError String
+      | PrWriteLogError Int String
+      | PrPackError String
+      | FtReadLogError Int String
+        deriving Show
+
 
 ---------------
 
@@ -77,7 +86,9 @@ listenLoop sock =  do
         print i
         case handleRequest conn i of
           Left e -> handleHandleError conn e
-          Right io -> io
+          Right bs -> do 
+                      res <- bs
+                      sendResponse conn res
   listenLoop sock
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
@@ -102,37 +113,43 @@ recvFromSock (sock, sockaddr) =
        Left e -> return $ Left $ SocketRecvError $ show e
        Right bs -> return $ Right bs
 
-handleRequest :: (Socket, SockAddr) -> BL.ByteString -> Either HandleError (IO())
+handleRequest :: (Socket, SockAddr) -> BL.ByteString -> Either HandleError (IO BL.ByteString)
 handleRequest (sock, sockaddr) input = do
   case readRequest input of
     Left (bs, bo, e) -> Left $ ParseRequestError e
     Right (bs, bo, rm) -> do
         x <- case rqApiKey rm of
-          0  -> handleProduceRequest (rqRequest rm) sock
+          0  -> handleProduceRequest (rqRequest rm)
           1  -> handleFetchRequest (rqRequest rm) sock
-          2  -> Right $ putStrLn "OffsetRequest"
-          3  -> Right $ putStrLn "MetadataRequest"
-          8  -> Right $ putStrLn "OffsetCommitRequest"
-          9  -> Right $ putStrLn "OffsetFetchRequest"
-          10 -> Right $ putStrLn "ConsumerMetadataRequest"
-          _  -> Right $ putStrLn "Unknown ApiKey"
+          --2  -> Right $ putStrLn "OffsetRequest"
+          --3  -> Right $ putStrLn "MetadataRequest"
+          --8  -> Right $ putStrLn "OffsetCommitRequest"
+          --9  -> Right $ putStrLn "OffsetFetchRequest"
+          --10 -> Right $ putStrLn "ConsumerMetadataRequest"
+          --_  -> Right $ putStrLn "Unknown ApiKey"
         return x
 
 -----------------
 -- ProduceRequest
 -----------------
 
-handleProduceRequest :: Request -> Socket -> Either HandleError (IO())
-handleProduceRequest req sock = do
-  return $ mapM writeLog [ 
-      (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
-      | x <- rqPrTopics req, y <- partitions x 
-                         ]
+handleProduceRequest :: Request ->  Either HandleError (IO BL.ByteString)
+handleProduceRequest req = do
+  --w <- liftIO $ tryIOError( mapM writeLog [ 
+  --                  (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
+  --                  | x <- rqPrTopics req, y <- partitions x 
+  --                        ]
+  --        )
+  --case w of
+  --    Left e -> Left $ PrWriteLogError 0 "hoi"
+  --    Right -> return $ buildPrResponseMessage packProduceResponse
+
   -- meanwhile (between rq and rs) client can disconnect
   -- therefore broker would still send response since disconnection is not retrieved
   --return $ catch
-  Right (sendProduceResponse sock packProduceResponse)
+  --Right $ return $ buildPrResponseMessage packProduceResponse
   --  (\(SomeException e) -> PrError $ show (e :: IOException))
+  return $ return $ buildPrResponseMessage packProduceResponse 
 
 -- TODO dynamic function
 packProduceResponse :: ResponseMessage 
@@ -149,9 +166,8 @@ packProduceResponse =
   in 
   responseMessage 
 
-sendProduceResponse :: Socket -> ResponseMessage -> IO()
-sendProduceResponse socket responsemessage = SBL.sendAll socket $ buildPrResponseMessage responsemessage
-
+sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO()
+sendResponse (socket, addr) responsemessage = SBL.sendAll socket $ responsemessage
 
 -----------------
 -- FetchRequest
@@ -176,9 +192,9 @@ packLogToFtRs t = do
         (numPartitions t )
         rss
 
-handleFetchRequest :: Request -> Socket -> Either HandleError (IO())
+handleFetchRequest :: Request -> Socket -> Either HandleError (IO BL.ByteString)
 handleFetchRequest req sock = do
   let rsms = liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req)
   let msg = liftM buildFtRsMessage rsms
-  Right $ join $ liftM (SBL.sendAll sock) msg
+  Right msg
 
