@@ -141,7 +141,7 @@ handleRequest (sock, sockaddr) input = do
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
   w <- tryIOError( mapM writeLog [ 
-                    (BS.unpack(topicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
+                    (BS.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
                     | x <- rqPrTopics req, y <- partitions x 
                           ]
           )
@@ -152,14 +152,16 @@ handleProduceRequest req = do
 
 packProduceResponse :: ResponseMessage 
 packProduceResponse = 
-  let error = RsPrError 0 0 0 
+  let error = RsPrPayload 0 0 0 
   in
-  let response = ProduceResponse 
-        (fromIntegral $ BS.length $ BS.pack "topicHardCoded")
-        (BS.pack "topicHardCoded")
-        (fromIntegral $ length [error])
-        [error]
-  in
+  let response = ProduceResponse
+        (RsTopic 
+          (fromIntegral $ BS.length $ BS.pack "topicHardCoded") 
+          (BS.pack "topicHardCoded") 
+          (fromIntegral $ length [error])
+          [error]
+        )
+        in
   let responseMessage = ResponseMessage 0 1 [response]
   in
   responseMessage 
@@ -178,12 +180,12 @@ packPartitionsToFtRsPayload t p = do
         (fromIntegral $ BL.length $ foldl (\acc ms -> BL.append acc (buildMessageSet ms)) BL.empty log)
         log
 
-packLogToFtRs :: Topic -> IO Response
+packLogToFtRs :: RqTopic -> IO Response
 packLogToFtRs t = do
-    rss <- (mapM (packPartitionsToFtRsPayload $ topicName t) $ partitions t)
+    rss <- (mapM (packPartitionsToFtRsPayload $ rqTopicName $ t) $ partitions t)
     return $ FetchResponse
-        (topicNameLen t)
-        (topicName t)
+        (rqTopicNameLen t)
+        (rqTopicName t )
         (numPartitions t )
         rss
 
