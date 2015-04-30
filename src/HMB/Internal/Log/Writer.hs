@@ -1,5 +1,5 @@
 module HMB.Internal.Log.Writer
-( writeLog, readLog ) where
+( writeLog, writeLogOrFail, readLog ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL

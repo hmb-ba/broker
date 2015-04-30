@@ -189,8 +189,8 @@ packLogToFtRs t = do
 
 handleFetchRequest :: Request -> Socket -> IO (Either HandleError BL.ByteString)
 handleFetchRequest req sock = do
-  let rsms = liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req)
-  let msg = liftM buildFtRsMessage rsms
-  m <- msg
-  return $ Right m
+  w <- tryIOError(liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req))
+  case w of 
+    Left e -> return $ Left $ FtReadLogError 0 "todo"
+    Right rsms -> return $ Right $ buildFtRsMessage rsms
 
