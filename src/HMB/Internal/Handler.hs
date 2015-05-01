@@ -7,7 +7,7 @@ module HMB.Internal.Handler
 import Network.Socket 
 import qualified Network.Socket.ByteString.Lazy as SBL
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Char8 as BC
 
 import System.IO 
 import System.Environment
@@ -127,7 +127,7 @@ handleRequest (sock, sockaddr) input = do
           0  -> handleProduceRequest (rqRequest rm)
           1  -> handleFetchRequest (rqRequest rm) sock
           --2  -> Right $ putStrLn "OffsetRequest"
-          --3  -> Right $ putStrLn "MetadataRequest"
+          3  -> handleMetadataRequest (rqRequest rm) sock 
           --8  -> Right $ putStrLn "OffsetCommitRequest"
           --9  -> Right $ putStrLn "OffsetFetchRequest"
           --10 -> Right $ putStrLn "ConsumerMetadataRequest"
@@ -141,7 +141,7 @@ handleRequest (sock, sockaddr) input = do
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
   w <- tryIOError( mapM writeLog [ 
-                    (BS.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
+                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
                     | x <- rqPrTopics req, y <- partitions x 
                           ]
           )
@@ -156,8 +156,8 @@ packProduceResponse =
   in
   let response = ProduceResponse
         (RsTopic 
-          (fromIntegral $ BS.length $ BS.pack "topicHardCoded") 
-          (BS.pack "topicHardCoded") 
+          (fromIntegral $ BL.length $ C.pack "topicHardCoded") 
+          (BC.pack "topicHardCoded") 
           (fromIntegral $ length [error])
           [error]
         )
@@ -170,9 +170,9 @@ packProduceResponse =
 -- FetchRequest
 -----------------
 
-packPartitionsToFtRsPayload :: TopicName -> Partition -> IO RsFtPayload
+packPartitionsToFtRsPayload :: TopicName -> Partition -> IO RsPayload
 packPartitionsToFtRsPayload t p = do
-    log <- readLog (BS.unpack $ t, fromIntegral $ rqFtPartitionNumber p, fromIntegral $ rqFtFetchOffset p)
+    log <- readLog (BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p, fromIntegral $ rqFtFetchOffset p)
     return $ RsFtPayload
         0
         0
@@ -195,4 +195,27 @@ handleFetchRequest req sock = do
   case w of 
     Left e -> return $ Left $ FtReadLogError 0 "todo"
     Right rsms -> return $ Right $ buildFtRsMessage rsms
+
+
+-----------------
+-- MetadataRequest
+-----------------
+packMdRsPayloadTopic :: String -> IO RsPayload
+packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (BC.pack t) 0 [] --TODO: Partition Metadata 
+
+packMdRs :: IO Response
+packMdRs = do 
+  ts <- getTopicNames
+  tss <- mapM packMdRsPayloadTopic ts 
+  return $ MetadataResponse 
+            1
+            ([RsMdPayloadBroker 0 (fromIntegral $ BL.length $ C.pack "localhost") (BC.pack "localhost") 4343]) --single broker solution
+            (fromIntegral $ length tss) 
+            tss 
+
+handleMetadataRequest :: Request -> Socket -> IO (Either HandleError BL.ByteString)
+handleMetadataRequest req sock = do 
+  res <- packMdRs 
+  return $ Right $ buildMdRsMessage $ ResponseMessage 0 1 [res]
+
 

@@ -1,8 +1,10 @@
 module HMB.Internal.Log.Writer
-( writeLog, writeLogOrFail, readLog ) where
+( writeLog, readLog, getTopicNames ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as BC
+
 import Data.Binary.Put
 import System.Directory
 import Control.Conditional
@@ -11,11 +13,7 @@ import Kafka.Protocol
 
 import Data.Binary.Get
 
-import Control.Exception
-import System.IO.Error -- IOError
-import GHC.IO.Exception -- IOError Types 
-import Control.Monad.Error
-
+import Control.Applicative
 
 type TopicStr = String --TODO: better name (ambigious)
 type PartitionStr = Int  -- TODO: better name (ambigious)
@@ -23,7 +21,7 @@ type PartitionStr = Int  -- TODO: better name (ambigious)
 type MessageInput = (TopicStr, PartitionStr, Log)
 
 logFolder :: TopicStr -> PartitionStr -> String
-logFolder t p = t ++ "_" ++ show p
+logFolder t p = "log/" ++ t ++ "_" ++ show p
 
 logFile :: (Integral i) => i -> String
 logFile o = (show $ fromIntegral o) ++ ".log"
@@ -44,12 +42,12 @@ writeLog (topicName, partitionNumber, log) = do
       (appendToLog filePath (topicName,partitionNumber, log)) 
       (newLog filePath (topicName,partitionNumber, log))
 
-writeLogOrFail :: MessageInput -> IO(Either String ())
-writeLogOrFail input = do
- r <- tryIOError(writeLog input)
- case r of 
-    Left e -> return $ Left $ show e 
-    Right io -> return $ Right io 
+--writeLogOrFail :: MessageInput -> IO(Either String ())
+--writeLogOrFail input = do
+-- r <- tryIOError(writeLog input)
+-- case r of 
+--    Left e -> return $ Left $ show e 
+--    Right io -> return $ Right io 
 
 appendToLog :: String -> MessageInput -> IO() 
 appendToLog filepath (t, p, log)  = do 
@@ -66,6 +64,7 @@ newLog filepath (t, p, log) = do
   return ()
 
 maxOffset :: [Offset] -> Offset 
+maxOffset [] = 0 
 maxOffset [x] = x
 maxOffset (x:xs) = max x (maxOffset xs)
 
@@ -73,8 +72,6 @@ getMaxOffsetOfLog :: MessageInput -> IO Offset
 getMaxOffsetOfLog (t, p, _) = do 
   log <- readLogFromBeginning (t,p) --TODO: optimieren, dass nich gesamter log gelesen werden muss 
   return (maxOffset $ [ offset x | x <- log ])
-
-
 
 -- todo: move to reader
 getLog :: Get Log
@@ -99,3 +96,6 @@ readLog :: (String, Int, Int) -> IO Log
 readLog (t, p, o) = do 
   log <- readLogFromBeginning (t,p)
   return ([ x | x <- log, fromIntegral(offset x) >= o])
+
+getTopicNames :: IO [String]
+getTopicNames = (getDirectoryContents "log/")
