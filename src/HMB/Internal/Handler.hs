@@ -9,6 +9,7 @@ import qualified Network.Socket.ByteString.Lazy as SBL
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BC
 
+import Data.Int
 import System.IO 
 import System.Environment
 import Control.Concurrent
@@ -26,6 +27,7 @@ import Prelude hiding (catch)
 import Control.Monad.Error
 import System.IO.Error
 
+import Control.Applicative
 ---------------
 -- error types
 ---------------
@@ -109,11 +111,17 @@ handleHandlerError (s, a) e = do
   sClose s
 
 recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
-recvFromSock (sock, sockaddr) =
-  do r <- try (SBL.recv sock 4096) :: IO (Either SomeException BL.ByteString)
-     case r of
-       Left e -> return $ Left $ SocketRecvError $ show e
-       Right bs -> return $ Right bs
+recvFromSock (sock, sockaddr) =  do 
+  respLen <- try (SBL.recv sock (4 :: Int64)) :: IO (Either SomeException BL.ByteString)
+  case respLen of
+    Left e -> return $ Left $ SocketRecvError $ show e 
+    Right rl -> do
+      response <- try (SBL.recv sock $ getLength $ rl) :: IO (Either SomeException BL.ByteString)
+      case response of
+        Left e -> return $ Left $ SocketRecvError $ show e
+        Right bs -> return $ Right bs
+  where 
+    getLength = runGet $ fromIntegral <$> getWord32be
 
 sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO()
 sendResponse (socket, addr) responsemessage = SBL.sendAll socket $ responsemessage
