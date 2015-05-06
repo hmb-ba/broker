@@ -11,7 +11,7 @@ import Data.Word
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C
-
+import Control.Concurrent
 import qualified Network.Socket.ByteString.Lazy as SBL
 
 startTest :: Int -> (b) -> b
@@ -30,7 +30,9 @@ main = do
   -------------------------
   -- Send / Receive Loop
   -------------------------
-  return $ map show $ replicate 1000000 (packPrRqMessage ("clientX", "topicX", 0, "100bytes"))
+  replicateM_ 100000 (sendRequest sock $ packPrRqMessage ("clientX", "topicX", 0, "100bytes"))
+  putStrLn "done produce"
+  threadDelay 10000000
   return ()
     
     --------------------

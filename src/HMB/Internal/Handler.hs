@@ -62,7 +62,6 @@ data HandleError =
       | PrWriteLogError Int String
       | PrPackError String
       | FtReadLogError Int String
-      | SendResponseError String 
         deriving Show
 
 
@@ -94,14 +93,13 @@ listenLoop sock =  do
           Right bs -> do 
             r <- try(sendResponse conn bs) :: IO (Either SomeException ())
             case r of 
-              Left e -> handleHandlerError conn $ SendResponseError $ show e
+              Left e -> handleSocketError conn $ SocketSendError $ show e
               Right r -> return r
   listenLoop sock
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
 handleSocketError (sock, sockaddr) e = do
   putStrLn $ show e
-  SBL.sendAll sock $ C.pack $ show e
   sClose sock
 
 handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
@@ -144,7 +142,7 @@ handleRequest (sock, sockaddr) input = do
           --8  -> Right $ putStrLn "OffsetCommitRequest"
           --9  -> Right $ putStrLn "OffsetFetchRequest"
           --10 -> Right $ putStrLn "ConsumerMetadataRequest"
-          --_  -> Right $ putStrLn "Unknown ApiKey"
+          _  -> return $ Right BL.empty
         return handle
 
 -----------------
