@@ -62,6 +62,7 @@ data HandleError =
       | PrWriteLogError Int String
       | PrPackError String
       | FtReadLogError Int String
+      | SendResponseError String 
         deriving Show
 
 
@@ -90,7 +91,11 @@ listenLoop sock =  do
         handle <- handleRequest conn i
         case handle of
           Left e -> handleHandlerError conn e
-          Right bs -> sendResponse conn bs
+          Right bs -> do 
+            r <- try(sendResponse conn bs) :: IO (Either SomeException ())
+            case r of 
+              Left e -> handleHandlerError conn $ SendResponseError $ show e
+              Right r -> return r
   listenLoop sock
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
