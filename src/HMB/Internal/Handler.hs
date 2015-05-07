@@ -13,21 +13,19 @@ import Data.Int
 import System.IO 
 import System.Environment
 import Control.Concurrent
+import Control.Concurrent.Chan
 import Control.Monad
-
 import Kafka.Protocol
 import Data.Binary.Get
-
-import HMB.Internal.Log
 import qualified Data.ByteString.Lazy.Char8 as C
-
 import Control.Exception
 import Prelude hiding (catch)
-
 import Control.Monad.Error
 import System.IO.Error
-
 import Control.Applicative
+
+import HMB.Internal.Log
+
 ---------------
 -- error types
 ---------------
@@ -62,6 +60,7 @@ data HandleError =
       | PrWriteLogError Int String
       | PrPackError String
       | FtReadLogError Int String
+      | SendResponseError String 
         deriving Show
 
 
@@ -81,25 +80,29 @@ initHandler = do
 listenLoop :: Socket -> IO()
 listenLoop sock =  do
   conn <- accept sock
-  forkIO $ forever $ do
-    r <- recvFromSock conn
-    case (r) of
-      Left e -> handleSocketError conn e
-      Right i -> do 
-        print i
-        handle <- handleRequest conn i
-        case handle of
-          Left e -> handleHandlerError conn e
-          Right bs -> do 
-            r <- try(sendResponse conn bs) :: IO (Either SomeException ())
-            case r of 
-              Left e -> handleSocketError conn $ SocketSendError $ show e
-              Right r -> return r
+  forkIO $ forever $ runConnection conn
   listenLoop sock
+
+runConnection :: (Socket, SockAddr) -> IO()
+runConnection (sock, sockaddr) = do 
+  r <- recvFromSock (sock, sockaddr)
+  case (r) of
+    Left e -> handleSocketError (sock, sockaddr)  e
+    Right i -> do 
+      --print i
+      handle <- handleRequest (sock, sockaddr) i
+      case handle of
+        Left e -> handleHandlerError (sock, sockaddr) e
+        Right bs -> do 
+          r <- try(sendResponse (sock, sockaddr) bs) :: IO (Either SomeException ())
+          case r of 
+            Left e -> handleHandlerError (sock, sockaddr) $ SendResponseError $ show e
+            Right r -> return r
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
 handleSocketError (sock, sockaddr) e = do
   putStrLn $ show e
+  SBL.sendAll sock $ C.pack $ show e
   sClose sock
 
 handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
@@ -142,7 +145,7 @@ handleRequest (sock, sockaddr) input = do
           --8  -> Right $ putStrLn "OffsetCommitRequest"
           --9  -> Right $ putStrLn "OffsetFetchRequest"
           --10 -> Right $ putStrLn "ConsumerMetadataRequest"
-          _  -> return $ Right BL.empty
+          --_  -> Right $ putStrLn "Unknown ApiKey"
         return handle
 
 -----------------
