@@ -93,7 +93,7 @@ runConnection (sock, sockaddr) chan = do
       --print i
       --handle <- handleRequest (sock, sockaddr) i
       handle <- writeRequestToChan i chan
-      --putStrLn "x"
+      putStrLn "x"
       case handle of
         Left e -> handleHandlerError (sock, sockaddr) e
         Right bs -> bs
