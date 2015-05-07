@@ -30,7 +30,7 @@ main = do
   -------------------------
   -- Send / Receive Loop
   -------------------------
-  replicateM_ 100000 (sendRequest sock $ packPrRqMessage ("clientX", "topicX", 0, "100bytes"))
+  replicateM_ 1000000 (sendRequest sock $ packPrRqMessage ("clientX", "topicX", 0, "100bytes"))
   putStrLn "done produce"
   threadDelay 10000000
   return ()

@@ -69,35 +69,38 @@ data HandleError =
 readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
 readRequest a = runGetOrFail requestMessageParser a
 
-initHandler :: IO Socket
+initHandler :: IO (Socket, Chan RequestMessage)
 initHandler = do
   sock <- socket AF_INET Stream 0
   setSocketOption sock ReuseAddr 1
   bindSocket sock (SockAddrInet 4343 iNADDR_ANY)
   listen sock 2
-  return sock
+  chan <- newChan
+  return (sock, chan)
 
-listenLoop :: Socket -> IO()
-listenLoop sock =  do
+listenLoop :: (Socket, Chan RequestMessage) -> IO()
+listenLoop (sock, chan) =  do
   conn <- accept sock
-  forkIO $ forever $ runConnection conn
-  listenLoop sock
+  forkIO $ forever $ runConnection conn chan
+  listenLoop (sock, chan)
 
-runConnection :: (Socket, SockAddr) -> IO()
-runConnection (sock, sockaddr) = do 
+runConnection :: (Socket, SockAddr) -> Chan RequestMessage -> IO()
+runConnection (sock, sockaddr) chan = do 
   r <- recvFromSock (sock, sockaddr)
   case (r) of
     Left e -> handleSocketError (sock, sockaddr)  e
     Right i -> do 
       --print i
-      handle <- handleRequest (sock, sockaddr) i
+      --handle <- handleRequest (sock, sockaddr) i
+      handle <- writeRequestToChan i chan
+      --putStrLn "x"
       case handle of
         Left e -> handleHandlerError (sock, sockaddr) e
-        Right bs -> do 
-          r <- try(sendResponse (sock, sockaddr) bs) :: IO (Either SomeException ())
-          case r of 
-            Left e -> handleHandlerError (sock, sockaddr) $ SendResponseError $ show e
-            Right r -> return r
+        Right bs -> bs
+          --r <- try(sendResponse (sock, sockaddr) bs) :: IO (Either SomeException ())
+          --case r of 
+            --Left e -> handleHandlerError (sock, sockaddr) $ SendResponseError $ show e
+            --Right r -> return r
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
 handleSocketError (sock, sockaddr) e = do
@@ -129,24 +132,27 @@ recvFromSock (sock, sockaddr) =  do
   where 
     getLength = runGet $ fromIntegral <$> getWord32be
 
+writeRequestToChan :: BL.ByteString -> Chan RequestMessage -> IO(Either HandleError (IO()))
+writeRequestToChan input chan = do 
+  case readRequest input of
+    Left (bs, bo, e) -> return $ Left $ ParseRequestError e
+    Right (bs, bo, rm) -> return $ Right $ writeChan chan rm 
+
 sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO()
 sendResponse (socket, addr) responsemessage = SBL.sendAll socket $ responsemessage
 
-handleRequest :: (Socket, SockAddr) -> BL.ByteString -> IO (Either HandleError BL.ByteString)
-handleRequest (sock, sockaddr) input = do
-  case readRequest input of
-    Left (bs, bo, e) -> return $ Left $ ParseRequestError e
-    Right (bs, bo, rm) -> do
-        handle <- case rqApiKey rm of
-          0  -> handleProduceRequest (rqRequest rm)
-          1  -> handleFetchRequest (rqRequest rm) sock
-          --2  -> Right $ putStrLn "OffsetRequest"
-          3  -> handleMetadataRequest (rqRequest rm) sock 
-          --8  -> Right $ putStrLn "OffsetCommitRequest"
-          --9  -> Right $ putStrLn "OffsetFetchRequest"
-          --10 -> Right $ putStrLn "ConsumerMetadataRequest"
-          --_  -> Right $ putStrLn "Unknown ApiKey"
-        return handle
+handleRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
+handleRequest rm = do
+   handle <- case rqApiKey rm of
+    0  -> handleProduceRequest (rqRequest rm)
+    1  -> handleFetchRequest (rqRequest rm) 
+    --2  -> Right $ putStrLn "OffsetRequest"
+    3  -> handleMetadataRequest (rqRequest rm) 
+    --8  -> Right $ putStrLn "OffsetCommitRequest"
+    --9  -> Right $ putStrLn "OffsetFetchRequest"
+    --10 -> Right $ putStrLn "ConsumerMetadataRequest"
+    --_  -> Right $ putStrLn "Unknown ApiKey"
+   return handle
 
 -----------------
 -- ProduceRequest
@@ -203,8 +209,8 @@ packLogToFtRs t = do
         (numPartitions t )
         rss
 
-handleFetchRequest :: Request -> Socket -> IO (Either HandleError BL.ByteString)
-handleFetchRequest req sock = do
+handleFetchRequest :: Request -> IO (Either HandleError BL.ByteString)
+handleFetchRequest req = do
   w <- tryIOError(liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req))
   case w of 
     Left e -> return $ Left $ FtReadLogError 0 "todo"
@@ -227,8 +233,8 @@ packMdRs = do
             (fromIntegral $ length tss) 
             tss 
 
-handleMetadataRequest :: Request -> Socket -> IO (Either HandleError BL.ByteString)
-handleMetadataRequest req sock = do 
+handleMetadataRequest :: Request -> IO (Either HandleError BL.ByteString)
+handleMetadataRequest req = do 
   res <- packMdRs 
   return $ Right $ buildMdRsMessage $ ResponseMessage 0 1 [res]
 
