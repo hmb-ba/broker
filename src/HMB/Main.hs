@@ -18,19 +18,22 @@ import HMB.Internal.Handler
 
 main = do
   --parseLogData
-
+  done <- newEmptyMVar 
   (sock, chan) <- initHandler
   
-  listenLoop (sock, chan)
+  forkIO $ listenLoop (sock, chan)
   putStrLn "loop"
-   --mapM_ wait[t1]
   forkIO $ fix $ \loop -> do
     msg <- readChan chan
     res <- handleRequest msg
     case res of 
       Left e -> putStrLn $ "[HandleError] " ++ show e
-      Right r -> putStrLn $ BC.unpack r 
+      Right r -> putStrLn $ BC.unpack r
     loop
+    putMVar done ()
+
+  takeMVar done  
+
   putStrLn "exit"
   
   
