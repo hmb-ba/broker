@@ -59,11 +59,13 @@ data SocketError =
       | SocketSendError String
         deriving Show
 
-data HandleError = PrWriteLogError Int String
+data HandleError = 
+        PrWriteLogError Int String
       | PrPackError String
       | ParseRequestError String 
       | FtReadLogError Int String
-      | SendResponseError String 
+      | SendResponseError String
+      | UnknownRqError
         deriving Show
 
 ---------------------------
@@ -185,6 +187,8 @@ handleHandlerError (s, a) (ParseRequestError e) = do
     putStrLn $ "***Host " ++ (show a) ++ " disconnected ***"
 handleHandlerError (s, a) (PrWriteLogError o e) = do
     putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
+handleHandlerError (s, a) UnknownRqError = do
+    putStrLn $ show "[UnknownRqError]"
 handleHandlerError (s, a) e = do
   putStrLn $ show e
   SBL.sendAll s $ C.pack $ show e
@@ -202,7 +206,7 @@ handleRequest rm = do
     --8  -> Right $ putStrLn "OffsetCommitRequest"
     --9  -> Right $ putStrLn "OffsetFetchRequest"
     --10 -> Right $ putStrLn "ConsumerMetadataRequest"
-    --_  -> Right $ putStrLn "Unknown ApiKey"
+    _  -> return $ Left UnknownRqError
    return handle
 
 -----------------
