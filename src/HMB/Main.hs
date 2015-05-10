@@ -22,27 +22,23 @@ main = do
 
   sock <- initSocket
   chan <- initReqChan
+  rsChan <- initResChan
 
   forkIO $ runAcceptor sock chan
-  putStrLn "***Acceptor Thread started to work"
+  putStrLn "***Acceptor Thread started***"
+  
+  forkIO $ runResponser rsChan 
+  putStrLn "***Responser Thread started***"
 
     --forkIO $ fix $ \loop -> do
-  forkIO $ runApiHandler chan
-  putStrLn "***API Worker Thread Started to work"
+  forkIO $ runApiHandler chan rsChan
+  putStrLn "***API Worker Thread started"
   --  loop
   --  putMVar done ()
 
   takeMVar done  
+  --threadDelay 100000000
 
   putStrLn "exit"
-  
-  
 
-  --sendNetworkData
-
---parseLogData = do
-  --file <- getArgs
-  --log <- parseLog $ head file
-  --print log
-  --writeLog "myfile" 0 0 log
 
