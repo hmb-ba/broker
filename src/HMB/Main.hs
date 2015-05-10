@@ -27,8 +27,8 @@ main = do
   forkIO $ runAcceptor sock rqChan
   putStrLn "***Acceptor Thread started***"
   
-  forkIO $ runResponser rsChan 
-  putStrLn "***Responser Thread started***"
+  forkIO $ runResponder rsChan 
+  putStrLn "***Responder Thread started***"
 
     --forkIO $ fix $ \loop -> do
   forkIO $ runApiHandler rqChan rsChan

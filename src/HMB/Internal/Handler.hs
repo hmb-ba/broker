@@ -5,7 +5,7 @@ module HMB.Internal.Handler
 , initResChan
 , runAcceptor
 , runApiHandler
-, runResponser
+, runResponder
 ) where 
 
 import Network.Socket 
@@ -66,8 +66,6 @@ data HandleError = PrWriteLogError Int String
       | SendResponseError String 
         deriving Show
 
---data ParseError = ParseRequestError String deriving Show
-
 ---------------------------
 --Initialize Socket 
 ---------------------------
@@ -86,7 +84,7 @@ type ChanMessage = ((Socket, SockAddr), BL.ByteString)
 type RequestChan = Chan ChanMessage
 
 initReqChan :: IO RequestChan
-initReqChan = newChan 
+initReqChan = newChan
 
 --------------------------
 -- Initialize Response Channel
@@ -145,8 +143,8 @@ handleSocketError (sock, sockaddr) e = do
 -----------------------
 -- Response Processor Thread
 -----------------------
-runResponser :: ResponseChan -> IO() 
-runResponser chan = do 
+runResponder :: ResponseChan -> IO() 
+runResponder chan = do 
   (conn, res) <- readChan chan 
   res <- sendResponse conn res 
   case res of 
@@ -154,7 +152,7 @@ runResponser chan = do
     Right io -> do 
       putStrLn "***Response sent***"
       return io
-  runResponser chan 
+  runResponder chan 
 
 sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO(Either SomeException ())
 sendResponse (socket, addr) responsemessage = try(SBL.sendAll socket $ responsemessage) :: IO (Either SomeException ())
