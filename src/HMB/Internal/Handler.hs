@@ -5,7 +5,7 @@ module HMB.Internal.Handler
 , initResChan
 , runAcceptor
 , runApiHandler
-, runResponser
+, runResponder
 ) where 
 
 import Network.Socket 
@@ -59,14 +59,14 @@ data SocketError =
       | SocketSendError String
         deriving Show
 
-data HandleError = PrWriteLogError Int String
+data HandleError = 
+        PrWriteLogError Int String
       | PrPackError String
       | ParseRequestError String 
       | FtReadLogError Int String
-      | SendResponseError String 
+      | SendResponseError String
+      | UnknownRqError
         deriving Show
-
---data ParseError = ParseRequestError String deriving Show
 
 ---------------------------
 --Initialize Socket 
@@ -86,7 +86,7 @@ type ChanMessage = ((Socket, SockAddr), BL.ByteString)
 type RequestChan = Chan ChanMessage
 
 initReqChan :: IO RequestChan
-initReqChan = newChan 
+initReqChan = newChan
 
 --------------------------
 -- Initialize Response Channel
@@ -147,15 +147,14 @@ handleSocketError (sock, sockaddr) e = do
 -----------------------
 -- Response Processor Thread
 -----------------------
-runResponser :: ResponseChan -> IO() 
-runResponser chan = do 
+runResponder :: ResponseChan -> IO() 
+runResponder chan = do 
   (conn, res) <- readChan chan 
   res <- sendResponse conn res 
   case res of 
     Left e -> handleSocketError conn $ SocketSendError $ show e ---TODO: What to do with responses when client disconnected?
-    Right io -> return io 
-      --putStrLn "***Response sent***"
-  runResponser chan 
+    Right io -> return io
+  runResponder chan 
 
 sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO(Either SomeException ())
 sendResponse (socket, addr) responsemessage = try(SBL.sendAll socket $ responsemessage) :: IO (Either SomeException ())
@@ -188,6 +187,8 @@ handleHandlerError (s, a) (ParseRequestError e) = do
     putStrLn $ "***Host " ++ (show a) ++ " disconnected ***"
 handleHandlerError (s, a) (PrWriteLogError o e) = do
     putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
+handleHandlerError (s, a) UnknownRqError = do
+    putStrLn $ show "[UnknownRqError]"
 handleHandlerError (s, a) e = do
   putStrLn $ show e
   SBL.sendAll s $ C.pack $ show e
@@ -205,7 +206,7 @@ handleRequest rm = do
     --8  -> Right $ putStrLn "OffsetCommitRequest"
     --9  -> Right $ putStrLn "OffsetFetchRequest"
     --10 -> Right $ putStrLn "ConsumerMetadataRequest"
-    --_  -> Right $ putStrLn "Unknown ApiKey"
+    _  -> return $ Left UnknownRqError
    return handle
 
 -----------------
