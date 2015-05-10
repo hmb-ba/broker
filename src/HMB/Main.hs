@@ -19,18 +19,18 @@ import HMB.Internal.Handler
 main = do
   --parseLogData
   done <- newEmptyMVar 
-  (sock, chan) <- initHandler
-  
-  forkIO $ listenLoop (sock, chan)
-  putStrLn "loop"
-  forkIO $ fix $ \loop -> do
-    msg <- readChan chan
-    res <- handleRequest msg
-    case res of 
-      Left e -> putStrLn $ "[HandleError] " ++ show e
-      Right r -> putStrLn $ BC.unpack r
-    loop
-    putMVar done ()
+
+  sock <- initSocket
+  chan <- initReqChan
+
+  forkIO $ runAcceptor sock chan
+  putStrLn "***Acceptor Thread started to work"
+
+    --forkIO $ fix $ \loop -> do
+  forkIO $ runApiHandler chan
+  putStrLn "***API Worker Thread Started to work"
+  --  loop
+  --  putMVar done ()
 
   takeMVar done  
 

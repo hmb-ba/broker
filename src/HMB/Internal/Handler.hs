@@ -1,7 +1,10 @@
 module HMB.Internal.Handler 
 ( handleRequest
-, initHandler
-, listenLoop
+, initSocket
+, initReqChan
+, initResChan
+, runAcceptor
+, runApiHandler
 ) where 
 
 import Network.Socket 
@@ -55,52 +58,86 @@ data SocketError =
       | SocketSendError String
         deriving Show
 
-data HandleError =
-        ParseRequestError String
-      | PrWriteLogError Int String
+data HandleError = PrWriteLogError Int String
       | PrPackError String
       | FtReadLogError Int String
       | SendResponseError String 
         deriving Show
 
+data ParseError = ParseRequestError String deriving Show
 
----------------
-
-readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
-readRequest a = runGetOrFail requestMessageParser a
-
-initHandler :: IO (Socket, Chan RequestMessage)
-initHandler = do
+---------------------------
+--Initialize Socket 
+---------------------------
+initSocket :: IO Socket
+initSocket = do
   sock <- socket AF_INET Stream 0
   setSocketOption sock ReuseAddr 1
   bindSocket sock (SockAddrInet 4343 iNADDR_ANY)
   listen sock 2
-  chan <- newChan
-  return (sock, chan)
+  return sock
 
-listenLoop :: (Socket, Chan RequestMessage) -> IO()
-listenLoop (sock, chan) =  do
-  conn <- accept sock
-  forkIO $ forever $ runConnection conn chan
-  listenLoop (sock, chan)
+--------------------------
+-- Initialize Request Channel
+---------------------------
+type ReqChanMessage = ((Socket, SockAddr), RequestMessage)
+type RequestChan = Chan ReqChanMessage
 
-runConnection :: (Socket, SockAddr) -> Chan RequestMessage -> IO()
-runConnection (sock, sockaddr) chan = do 
-  r <- recvFromSock (sock, sockaddr)
+initReqChan :: IO RequestChan
+initReqChan = newChan 
+
+--------------------------
+-- Initialize Response Channel
+---------------------------
+type ResChanMessage = ((Socket, SockAddr), ResponseMessage)
+type ResponseChan = Chan ResChanMessage
+
+initResChan :: IO ResponseChan
+initResChan = newChan 
+
+-----------------------------
+-- Acceptor Thread
+----------------------------
+runAcceptor :: Socket -> RequestChan -> IO()
+runAcceptor sock chan =  do
+  (conSock, sockAddr) <- accept sock
+  putStrLn $ "***Host " ++ (show sockAddr) ++ " connected"
+  forkIO $ forever $ runConnection (conSock, sockAddr) chan
+  runAcceptor sock chan
+
+-----------------------------
+--Connection Processor Thread
+----------------------------
+runConnection :: (Socket, SockAddr) -> RequestChan -> IO()
+runConnection conn chan = do 
+  -- Receive data
+  r <- recvFromSock conn
   case (r) of
-    Left e -> handleSocketError (sock, sockaddr)  e
-    Right i -> do 
+    Left e -> handleSocketError conn  e
+    Right input -> do 
+      ---Parse request
+      case readRequest input of 
+        Left (bs, bo, e) -> handleParseReqError conn $ ParseRequestError e 
+        Right (bs, bo, req) -> do 
+          writeToReqChan conn chan req
+          putStrLn "*** Request Received"
       --print i
       --handle <- handleRequest (sock, sockaddr) i
-      handle <- writeRequestToChan i chan
-      putStrLn "x"
-      case handle of
-        Left e -> handleHandlerError (sock, sockaddr) e
-        Right bs -> bs
+      --handle <- writeToReqChan conn chan input
+      --putStrLn "x"
+      --case handle of
+        --Left e -> handleHandlerError conn e
+        --Right bs -> bs 
           --r <- try(sendResponse (sock, sockaddr) bs) :: IO (Either SomeException ())
           --case r of 
             --Left e -> handleHandlerError (sock, sockaddr) $ SendResponseError $ show e
             --Right r -> return r
+
+handleParseReqError :: (Socket, SockAddr) -> ParseError -> IO() 
+handleParseReqError (sock, sockaddr) e = do 
+  putStrLn $ show e
+  SBL.sendAll sock $ C.pack $ show e
+  sClose sock
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
 handleSocketError (sock, sockaddr) e = do
@@ -109,9 +146,9 @@ handleSocketError (sock, sockaddr) e = do
   sClose sock
 
 handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
-handleHandlerError (s, a) (ParseRequestError e) = do
-    putStrLn $ (show "[ParseError]: ") ++ e
-    sClose s
+--handleHandlerError (s, a) (ParseRequestError e) = do
+--    putStrLn $ (show "[ParseError]: ") ++ e
+--    sClose s
 handleHandlerError (s, a) (PrWriteLogError o e) = do
     putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
 handleHandlerError (s, a) e = do
@@ -123,7 +160,7 @@ recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
 recvFromSock (sock, sockaddr) =  do 
   respLen <- try (SBL.recv sock (4 :: Int64)) :: IO (Either SomeException BL.ByteString)
   case respLen of
-    Left e -> return $ Left $ SocketRecvError $ show e 
+    Left e -> return $ Left $ SocketRecvError $ show e
     Right rl -> do
       response <- try (SBL.recv sock $ getLength $ rl) :: IO (Either SomeException BL.ByteString)
       case response of
@@ -132,17 +169,32 @@ recvFromSock (sock, sockaddr) =  do
   where 
     getLength = runGet $ fromIntegral <$> getWord32be
 
-writeRequestToChan :: BL.ByteString -> Chan RequestMessage -> IO(Either HandleError (IO()))
-writeRequestToChan input chan = do 
-  case readRequest input of
-    Left (bs, bo, e) -> return $ Left $ ParseRequestError e
-    Right (bs, bo, rm) -> return $ Right $ writeChan chan rm 
+writeToReqChan :: (Socket, SockAddr) -> RequestChan -> RequestMessage -> IO()
+writeToReqChan conn chan req = writeChan chan (conn, req)
+
+readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
+readRequest a = runGetOrFail requestMessageParser a
 
 sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO()
 sendResponse (socket, addr) responsemessage = SBL.sendAll socket $ responsemessage
 
-handleRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
-handleRequest rm = do
+-------------------------------
+--API Handler Thread
+------------------------------
+runApiHandler :: RequestChan -> IO()
+runApiHandler chan = do
+  msg <- readChan chan
+  res <- handleRequest msg
+  case res of 
+    Left e -> putStrLn $ "[HandleError] " ++ show e
+    Right r -> putStrLn $ C.unpack r
+  runApiHandler chan
+
+writeToResChan :: (Socket, SockAddr) -> ResponseChan -> ResponseMessage -> IO()
+writeToResChan conn chan res = writeChan chan (conn, res)
+
+handleRequest :: ReqChanMessage -> IO (Either HandleError BL.ByteString)
+handleRequest (conn, rm) = do
    handle <- case rqApiKey rm of
     0  -> handleProduceRequest (rqRequest rm)
     1  -> handleFetchRequest (rqRequest rm) 
@@ -157,7 +209,6 @@ handleRequest rm = do
 -----------------
 -- ProduceRequest
 -----------------
-
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
   w <- tryIOError( mapM writeLog [ 
