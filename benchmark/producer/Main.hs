@@ -31,9 +31,9 @@ main = do
   -- Send / Receive Loop
   -------------------------
   let payload = C.pack "bytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytes"
-  let req = packPrRqMessage (C.pack "clientX", C.pack "topicX", 0, [ payload | x <- [1..10]])
+  let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [ payload | x <- [1..10]])
   print req
-  replicateM_ 10000000 (sendRequest sock $ req)
+  replicateM_ 1000 (sendRequest sock $ req)
   putStrLn "done produce"
   --threadDelay 10000000
   return ()

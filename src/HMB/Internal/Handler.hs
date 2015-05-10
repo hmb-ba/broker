@@ -118,7 +118,8 @@ runConnection conn chan True = do
       runConnection conn chan False
     Right input -> do 
       writeToReqChan conn chan input
-      putStrLn "***Request Received***"
+      --putStrLn "***Request Received***"
+
       runConnection conn chan True
 runConnection conn chan False = return () --TODO: Better solution for breaking out the loop? 
 
@@ -140,7 +141,8 @@ writeToReqChan conn chan req = writeChan chan (conn, req)
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
 handleSocketError (sock, sockaddr) e = do
-  sClose sock
+  return ()
+  --sClose sock
 
 -----------------------
 -- Response Processor Thread
@@ -151,9 +153,8 @@ runResponser chan = do
   res <- sendResponse conn res 
   case res of 
     Left e -> handleSocketError conn $ SocketSendError $ show e ---TODO: What to do with responses when client disconnected?
-    Right io -> do 
-      putStrLn "***Response sent***"
-      return io
+    Right io -> return io 
+      --putStrLn "***Response sent***"
   runResponser chan 
 
 sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO(Either SomeException ())

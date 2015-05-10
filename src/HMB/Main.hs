@@ -17,7 +17,6 @@ import HMB.Internal.Log
 import HMB.Internal.Handler
 
 main = do
-  --parseLogData
   done <- newEmptyMVar 
 
   sock <- initSocket
@@ -26,17 +25,13 @@ main = do
 
   forkIO $ runAcceptor sock rqChan
   putStrLn "***Acceptor Thread started***"
-  
+
   forkIO $ runResponser rsChan 
   putStrLn "***Responser Thread started***"
 
-    --forkIO $ fix $ \loop -> do
   forkIO $ runApiHandler rqChan rsChan
   putStrLn "***API Worker Thread started"
-  --  loop
-  --  putMVar done ()
 
-  --takeMVar done  
   forever $ threadDelay 100000000  --TODO: Managed Threads and wait for all Threads to be finished
 
   putStrLn "exit"
