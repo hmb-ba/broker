@@ -103,20 +103,24 @@ runAcceptor :: Socket -> RequestChan -> IO()
 runAcceptor sock chan =  do
   (conSock, sockAddr) <- accept sock
   putStrLn $ "***Host " ++ (show sockAddr) ++ " connected***"
-  forkIO $ forever $ runConnection (conSock, sockAddr) chan
+  forkIO $ runConnection (conSock, sockAddr) chan True
   runAcceptor sock chan
 
 -----------------------------
 --Connection Processor Thread
 ----------------------------
-runConnection :: (Socket, SockAddr) -> RequestChan -> IO()
-runConnection conn chan = do 
+runConnection :: (Socket, SockAddr) -> RequestChan -> Bool -> IO()
+runConnection conn chan True = do 
   r <- recvFromSock conn
   case (r) of
-    Left e -> handleSocketError conn  e
+    Left e -> do 
+      handleSocketError conn  e
+      runConnection conn chan False
     Right input -> do 
       writeToReqChan conn chan input
       putStrLn "***Request Received***"
+      runConnection conn chan True
+runConnection conn chan False = return () --TODO: Better solution for breaking out the loop? 
 
 recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
 recvFromSock (sock, sockaddr) =  do 
@@ -136,10 +140,7 @@ writeToReqChan conn chan req = writeChan chan (conn, req)
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
 handleSocketError (sock, sockaddr) e = do
-  --putStrLn $ show e
-  --SBL.sendAll sock $ C.pack $ show e
   sClose sock
-  putStrLn $ "***Host " ++ (show sockaddr) ++ "disconnected***"
 
 -----------------------
 -- Response Processor Thread
@@ -149,7 +150,7 @@ runResponser chan = do
   (conn, res) <- readChan chan 
   res <- sendResponse conn res 
   case res of 
-    Left e -> handleSocketError conn $ SocketSendError $ show e 
+    Left e -> handleSocketError conn $ SocketSendError $ show e ---TODO: What to do with responses when client disconnected?
     Right io -> do 
       putStrLn "***Response sent***"
       return io
@@ -162,8 +163,8 @@ sendResponse (socket, addr) responsemessage = try(SBL.sendAll socket $ responsem
 --API Handler Thread
 ------------------------------
 runApiHandler :: RequestChan -> ResponseChan -> IO()
-runApiHandler chan rsChan = do
-  (conn, req) <- readChan chan
+runApiHandler rqChan rsChan = do
+  (conn, req) <- readChan rqChan
   case readRequest req of
     Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
     Right (bs, bo, rm) -> do
@@ -171,10 +172,7 @@ runApiHandler chan rsChan = do
       case res  of
         Left e -> handleHandlerError conn e
         Right bs -> writeToResChan conn rsChan bs
-          --case r of 
-          -- Left e -> handleHandlerError conn $ SendResponseError (show e)
-          --  Right r -> putStrLn C.unpack r -- TODO 
-  runApiHandler chan rsChan
+  runApiHandler rqChan rsChan
 
 readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
 readRequest a = runGetOrFail requestMessageParser a
@@ -186,14 +184,14 @@ handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
 handleHandlerError (s, a) (ParseRequestError e) = do
     putStrLn $ (show "[ParseError]: ") ++ e
     sClose s
-    putStrLn $ "***Host " ++ (show a) ++ "disconnected***"
+    putStrLn $ "***Host " ++ (show a) ++ " disconnected ***"
 handleHandlerError (s, a) (PrWriteLogError o e) = do
     putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
 handleHandlerError (s, a) e = do
   putStrLn $ show e
   SBL.sendAll s $ C.pack $ show e
   sClose s
-  putStrLn $ "***Host " ++ (show a) ++ "disconnected***"
+  putStrLn $ "***Host " ++ (show a) ++ "disconnected ***"
 
 
 handleRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)

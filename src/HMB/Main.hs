@@ -21,24 +21,25 @@ main = do
   done <- newEmptyMVar 
 
   sock <- initSocket
-  chan <- initReqChan
+  rqChan <- initReqChan
   rsChan <- initResChan
 
-  forkIO $ runAcceptor sock chan
+  forkIO $ runAcceptor sock rqChan
   putStrLn "***Acceptor Thread started***"
   
   forkIO $ runResponser rsChan 
   putStrLn "***Responser Thread started***"
 
     --forkIO $ fix $ \loop -> do
-  forkIO $ runApiHandler chan rsChan
+  forkIO $ runApiHandler rqChan rsChan
   putStrLn "***API Worker Thread started"
   --  loop
   --  putMVar done ()
 
-  takeMVar done  
-  --threadDelay 100000000
+  --takeMVar done  
+  forever $ threadDelay 100000000  --TODO: Managed Threads and wait for all Threads to be finished
 
   putStrLn "exit"
+
 
 
