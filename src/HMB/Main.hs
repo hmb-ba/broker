@@ -21,14 +21,14 @@ main = do
   done <- newEmptyMVar 
   (sock, chan) <- initHandler
   
-  forkIO $ listenLoop (sock, chan)
-  putStrLn "loop"
-  forkIO $ fix $ \loop -> do
-    msg <- readChan chan
-    res <- handleRequest msg
-    case res of 
-      Left e -> putStrLn $ "[HandleError] " ++ show e
-      Right r -> putStrLn $ BC.unpack r
+  forkIO $ --acceptor thread
+    forever $ 
+      listenLoop (sock, chan)
+
+  putStrLn "api"
+
+  forkIO $ fix $ \loop -> do --api processor thread
+    processRequest (sock, chan)
     loop
     putMVar done ()
 

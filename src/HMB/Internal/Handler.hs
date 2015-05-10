@@ -1,7 +1,7 @@
 module HMB.Internal.Handler 
-( handleRequest
-, initHandler
+( initHandler
 , listenLoop
+, processRequest
 ) where 
 
 import Network.Socket 
@@ -81,43 +81,14 @@ initHandler = do
 listenLoop :: (Socket, Chan RequestMessage) -> IO()
 listenLoop (sock, chan) =  do
   conn <- accept sock
-  forkIO $ forever $ runConnection conn chan
-  listenLoop (sock, chan)
+  forkIO $ runConnection conn chan --processor thread
 
 runConnection :: (Socket, SockAddr) -> Chan RequestMessage -> IO()
 runConnection (sock, sockaddr) chan = do 
   r <- recvFromSock (sock, sockaddr)
   case (r) of
     Left e -> handleSocketError (sock, sockaddr)  e
-    Right i -> do 
-      --print i
-      --handle <- handleRequest (sock, sockaddr) i
-      handle <- writeRequestToChan i chan
-      putStrLn "x"
-      case handle of
-        Left e -> handleHandlerError (sock, sockaddr) e
-        Right bs -> bs
-          --r <- try(sendResponse (sock, sockaddr) bs) :: IO (Either SomeException ())
-          --case r of 
-            --Left e -> handleHandlerError (sock, sockaddr) $ SendResponseError $ show e
-            --Right r -> return r
-
-handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
-handleSocketError (sock, sockaddr) e = do
-  putStrLn $ show e
-  SBL.sendAll sock $ C.pack $ show e
-  sClose sock
-
-handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
-handleHandlerError (s, a) (ParseRequestError e) = do
-    putStrLn $ (show "[ParseError]: ") ++ e
-    sClose s
-handleHandlerError (s, a) (PrWriteLogError o e) = do
-    putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
-handleHandlerError (s, a) e = do
-  putStrLn $ show e
-  SBL.sendAll s $ C.pack $ show e
-  sClose s
+    Right i -> writeRequestToChan (sock, sockaddr) chan i
 
 recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
 recvFromSock (sock, sockaddr) =  do 
@@ -132,14 +103,25 @@ recvFromSock (sock, sockaddr) =  do
   where 
     getLength = runGet $ fromIntegral <$> getWord32be
 
-writeRequestToChan :: BL.ByteString -> Chan RequestMessage -> IO(Either HandleError (IO()))
-writeRequestToChan input chan = do 
-  case readRequest input of
-    Left (bs, bo, e) -> return $ Left $ ParseRequestError e
-    Right (bs, bo, rm) -> return $ Right $ writeChan chan rm 
+writeRequestToChan :: (Socket, SockAddr) -> Chan BL.ByteString -> BL.ByteString -> IO()
+writeRequestToChan (sock, sockaddr) chan i = writeChan chan input
 
-sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO()
-sendResponse (socket, addr) responsemessage = SBL.sendAll socket $ responsemessage
+
+processRequest :: (Socket, Chan BL.ByteString) -> IO()
+processRequest (sock, chan) = do
+  msg <- readChan chan
+  case readRequest msg of
+    Left (bs, bo, e) -> return $ Left $ ParseRequestError e
+    Right (bs, bo, rm) -> do
+      res <- handleRequest msg
+      case res of
+        Left e -> handleHandlerError (sock, sockaddr) e
+        Right bs -> do
+          r <- sendResponse (sock, sockaddr) bs
+          case r of 
+            Left e -> handleHandlerError (sock, sockaddr) $ SendResponseError (show e)
+            Right r -> return r
+
 
 handleRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
 handleRequest rm = do
@@ -153,6 +135,27 @@ handleRequest rm = do
     --10 -> Right $ putStrLn "ConsumerMetadataRequest"
     --_  -> Right $ putStrLn "Unknown ApiKey"
    return handle
+
+sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO(Either SomeException ())
+sendResponse (socket, addr) responsemessage = try(SBL.sendAll socket $ responsemessage) :: IO (Either SomeException ())
+
+
+handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
+handleSocketError (sock, sockaddr) e = do
+  putStrLn $ show e
+  SBL.sendAll sock $ C.pack $ show e
+  sClose sock
+
+handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
+handleHandlerError (s, a) (ParseRequestError e) = do
+  putStrLn $ (show "[ParseError]: ") ++ e
+  sClose s
+handleHandlerError (s, a) (PrWriteLogError o e) = do
+  putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
+handleHandlerError (s, a) e = do
+  putStrLn $ show e
+  SBL.sendAll s $ C.pack $ show e
+  sClose s
 
 -----------------
 -- ProduceRequest
