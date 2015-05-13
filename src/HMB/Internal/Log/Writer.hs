@@ -102,9 +102,31 @@ getTopicNames = (getDirectoryContents "log/")
 
 
 --------------
+
+
+type LogSegment = (FilemessageSet, OffsetIndex)
+type FilemessageSet = [MessageSet]
+type OffsetIndex = [OffsetPosition]
+type OffsetPosition = (RelativeOffset, PhysicalPosition)
 type RelativeOffset = Word32
 type PhysicalPosition = Word32
-type IndexEntry = (RelativeOffset, PhysicalPosition)
+type FileName = String
+
+--g = appendIndex 
+
+f = appendLog getLastSegment (getLastOffset $ (getLastSegment . getLastOffsetPosition . getLastOffset))
+
+getLastSegment :: (Topic, Partition) -> FileName
+-- get active segment
+
+getLastOffsetPosition :: FileName -> OffsetPosition
+-- get offset of last index entry
+
+getLastOffset :: PhysicalPosition -> Offset
+
+appendIndex :: (IndexFile, OffsetPosition) -> IO()
+
+appendLog :: (LogFile, Offset) -> [MessageSet] -> IO()
 
 --readLastIndexEntry :: (TopicStr, PartitionStr) ->  IO IndexEntry
 --readLastIndexEntry (topic, partition) = do 
