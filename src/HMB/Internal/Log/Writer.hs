@@ -12,11 +12,11 @@ import Control.Monad
 import Kafka.Protocol
 
 import Data.Binary.Get
-
+import Data.Word
 import Control.Applicative
 
-type TopicStr = String --TODO: better name (ambigious)
-type PartitionStr = Int  -- TODO: better name (ambigious)
+type TopicStr = String 
+type PartitionStr = Int
 
 type MessageInput = (TopicStr, PartitionStr, Log)
 
@@ -99,3 +99,33 @@ readLog (t, p, o) = do
 
 getTopicNames :: IO [String]
 getTopicNames = (getDirectoryContents "log/")
+
+
+--------------
+type RelativeOffset = Word32
+type PhysicalPosition = Word32
+type IndexEntry = (RelativeOffset, PhysicalPosition)
+
+--readLastIndexEntry :: (TopicStr, PartitionStr) ->  IO IndexEntry
+--readLastIndexEntry (topic, partition) = do 
+--  let indexPath = getPath (logFolder topic partition) (indexFile 0) 
+--  ex <- doesFileExist indexPath
+--  if not ex 
+--    then (newIndex indexPath)
+--    else (newIndex indexPath)
+--  return ((0,0))
+
+newIndex :: String ->  IO IndexEntry
+newIndex filepath = do 
+  let e = buildIndexEntry (0,0)
+  BL.writeFile filepath e
+  return (0,0)
+
+buildIndexEntry :: IndexEntry -> BL.ByteString
+buildIndexEntry (o, p) = runPut $ do 
+  putWord32be o
+  putWord32be p 
+
+indexFile :: (Integral i) => i -> String 
+indexFile o = (show $ fromIntegral o) ++ ".index"
+
