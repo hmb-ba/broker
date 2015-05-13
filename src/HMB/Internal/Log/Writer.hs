@@ -107,27 +107,84 @@ getTopicNames = (getDirectoryContents "log/")
 type LogSegment = (FilemessageSet, OffsetIndex)
 type FilemessageSet = [MessageSet]
 type OffsetIndex = [OffsetPosition]
-type OffsetPosition = (RelativeOffset, PhysicalPosition)
+type OffsetPosition = (RelativeOffset, FileOffset)
 type RelativeOffset = Word32
 type PhysicalPosition = Word32
-type FileName = String
+type BaseOffset = Int --Word64
 
 --g = appendIndex 
 
-f = appendLog getLastSegment (getLastOffset $ (getLastSegment . getLastOffsetPosition . getLastOffset))
 
-getLastSegment :: (Topic, Partition) -> FileName
--- get active segment
+offsetFromFileName :: String -> Int
+offsetFromFileName = read . reverse . snd . splitAt 4 . reverse
 
-getLastOffsetPosition :: FileName -> OffsetPosition
+isLogFile :: String -> Bool
+isLogFile = ".log" `isInfixOf`
+
+isDirectory :: a -> Bool
+isDirectory x = elem x [".", ".."]
+
+filterRootDirectory :: [String] -> [String]
+filterRootDirectory d = filter (\x -> not $ isDirectory) dirs
+
+getLastSegment :: (Topic, Partition) -> IO BaseOffset
+getLastSegment (t, p) = do
+  dirs <- getDirectoryContents $ logfolder (C.unpack t) (C.unpack p)
+  return $ maximum $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
+
+
+getLastOffsetPosition :: BaseOffset -> OffsetPosition
 -- get offset of last index entry
 
-getLastOffset :: PhysicalPosition -> Offset
 
-appendIndex :: (IndexFile, OffsetPosition) -> IO()
 
-appendLog :: (LogFile, Offset) -> [MessageSet] -> IO()
+getLastOffset :: BaseOffset -> OffsetPosition -> Offset
+getLastOffset base (rel phys) = base + rel
 
+
+getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
+
+appendSegment :: [MessageSet] -> 
+appendSegment = do
+    appendIndex
+    appendLog
+
+assignOffset :: [MessageSet] -> Offset -> [MessageSet]
+--assignOffset = 
+
+
+buildIndexPath :: (Topic, Partition) -> String
+buildIndexPath (t, p) = buildPath (t, p) ".index"
+
+buildLogPath :: (Topic, Partition) -> String
+buildLogPath (t, p) = buildPath (t, p) ".log"
+
+buildPath :: (Topic, Partition) -> String -> String
+
+
+appendLog :: (Topic, Partition) -> [MessageSet] -> IO()
+appendLog (t, p) ms = 
+  BL.appendFile buildLogPath (t, p) $ buildMessageSets 
+    . assignOffset (ms) 
+    . getLastOffset(getLastSegment(t,p)) 
+    . getLastOffsetPosition 
+    . getLastSegment (t, p) 
+
+
+appendIndex :: (Topic, Partition) -> IO()
+appendIndex (t, p) = do
+  BL.appendFile buildIndexPath (t, p) $ buildOffsetPostition 
+    ((getRelativeOffset $
+      getLastOffset(getLastSegment(t,p)) 
+      . getLastOffsetPosition 
+      . getLastSegment (t, p) 
+    ),
+    fileSize buildIndexPath (t, p))
+
+buildOffsetPosition :: OffsetPosition -> BL.ByteString
+buildOffsetPosition (o, p) = runPut $ do 
+  putWord32be o
+  putWord32be p 
 --readLastIndexEntry :: (TopicStr, PartitionStr) ->  IO IndexEntry
 --readLastIndexEntry (topic, partition) = do 
 --  let indexPath = getPath (logFolder topic partition) (indexFile 0) 
@@ -143,11 +200,13 @@ newIndex filepath = do
   BL.writeFile filepath e
   return (0,0)
 
-buildIndexEntry :: IndexEntry -> BL.ByteString
-buildIndexEntry (o, p) = runPut $ do 
-  putWord32be o
-  putWord32be p 
+
 
 indexFile :: (Integral i) => i -> String 
 indexFile o = (show $ fromIntegral o) ++ ".index"
 
+
+getFileSize :: String -> IO FileOffset
+getFileSize path = do
+    stat <- getFileStatus path
+    return (fileSize stat)
