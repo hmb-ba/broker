@@ -15,6 +15,8 @@ import Data.Binary.Get
 import Data.Word
 import Control.Applicative
 
+import System.IO.MMap
+
 type TopicStr = String 
 type PartitionStr = Int
 
@@ -112,8 +114,6 @@ type RelativeOffset = Word32
 type PhysicalPosition = Word32
 type BaseOffset = Int --Word64
 
---g = appendIndex 
-
 
 offsetFromFileName :: String -> Int
 offsetFromFileName = read . reverse . snd . splitAt 4 . reverse
@@ -125,17 +125,36 @@ isDirectory :: a -> Bool
 isDirectory x = elem x [".", ".."]
 
 filterRootDirectory :: [String] -> [String]
-filterRootDirectory d = filter (\x -> not $ isDirectory) dirs
+filterRootDirectory d = filter (\x -> not isDirectory) dirs
 
 getLastSegment :: (Topic, Partition) -> IO BaseOffset
 getLastSegment (t, p) = do
   dirs <- getDirectoryContents $ logfolder (C.unpack t) (C.unpack p)
   return $ maximum $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
 
+-------------------------------------------------------
 
-getLastOffsetPosition :: BaseOffset -> OffsetPosition
+-- decode as long as physical position != 0 which means last index has passed
+decodeIndexEntry :: Get [OffsetPosition]
+decodeIndexEntry = do
+  rel  <- getWord32be
+  phys <- getWord32be
+  case phys of
+    0 -> return OffsetPosition (rel, phys) : []
+    _ -> return $ OffsetPosition (rel, phys) : decodeIndexEntry
+
+decodeIndex :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, OffsetPosition)
+decodeIndex = runGetOrFail decodeIndexEntry
+
+getLastOffsetPosition :: BaseOffset -> IO OffsetPosition
 -- get offset of last index entry
-
+-- 1. open file to bs
+-- 2. parse as long as not 0
+-- 3. read offset/physical from last element
+  bs <- mmapFileByteString "topic_partition/BaseOffset.log"
+  case decodeIndex bs of
+    Left (bs, bo, e)   ->
+    Right (bs, bo, ops) -> return $ last ops
 
 
 getLastOffset :: BaseOffset -> OffsetPosition -> Offset
