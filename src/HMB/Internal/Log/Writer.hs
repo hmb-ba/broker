@@ -16,6 +16,11 @@ import Data.Word
 import Control.Applicative
 
 import System.IO.MMap
+import System.IO
+--import System.Posix.Types --for file size 
+import qualified System.Posix.Files as Files
+import Data.List
+--import qualified Data.Text as Text -- for isInfixOf
 
 type TopicStr = String 
 type PartitionStr = Int
@@ -65,10 +70,6 @@ newLog filepath (t, p, log) = do
   BL.writeFile filepath l
   return ()
 
-maxOffset :: [Offset] -> Offset 
-maxOffset [] = 0 
-maxOffset [x] = x
-maxOffset (x:xs) = max x (maxOffset xs)
 
 getMaxOffsetOfLog :: MessageInput -> IO Offset
 getMaxOffsetOfLog (t, p, _) = do 
@@ -111,26 +112,28 @@ type FilemessageSet = [MessageSet]
 type OffsetIndex = [OffsetPosition]
 type OffsetPosition = (RelativeOffset, FileOffset)
 type RelativeOffset = Word32
-type PhysicalPosition = Word32
+type FileOffset = Word32
 type BaseOffset = Int --Word64
 
-
-offsetFromFileName :: String -> Int
+offsetFromFileName :: [Char] -> Int
 offsetFromFileName = read . reverse . snd . splitAt 4 . reverse
 
-isLogFile :: String -> Bool
-isLogFile = ".log" `isInfixOf`
+isLogFile :: [Char] -> Bool
+isLogFile x = ".log" `isInfixOf` x
 
-isDirectory :: a -> Bool
+isDirectory :: [Char] -> Bool
 isDirectory x = elem x [".", ".."]
 
-filterRootDirectory :: [String] -> [String]
-filterRootDirectory d = filter (\x -> not isDirectory) dirs
+filterRootDir :: [String] -> [String]
+filterRootDir d = filter (\x -> not $ isDirectory x) d
 
-getLastSegment :: (Topic, Partition) -> IO BaseOffset
-getLastSegment (t, p) = do
-  dirs <- getDirectoryContents $ logfolder (C.unpack t) (C.unpack p)
+getLastBaseOffset :: (TopicName, Partition) -> IO BaseOffset
+getLastBaseOffset (t, p) = do
+  dirs <- getDirectoryContents $ getLogFolder (t, p)
   return $ maximum $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
+
+getLogFolder :: (TopicName, Partition) -> String
+getLogFolder (t, p) = "log/" ++ (show t) ++ "_" ++ show p
 
 -------------------------------------------------------
 
@@ -140,10 +143,12 @@ decodeIndexEntry = do
   rel  <- getWord32be
   phys <- getWord32be
   case phys of
-    0 -> return OffsetPosition (rel, phys) : []
-    _ -> return $ OffsetPosition (rel, phys) : decodeIndexEntry
+    0 -> return $ (rel, phys)  : []
+    _ -> do 
+          e <- decodeIndexEntry
+          return $ (rel, phys) : e
 
-decodeIndex :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, OffsetPosition)
+decodeIndex :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, [OffsetPosition])
 decodeIndex = runGetOrFail decodeIndexEntry
 
 getLastOffsetPosition :: BaseOffset -> IO OffsetPosition
@@ -151,54 +156,81 @@ getLastOffsetPosition :: BaseOffset -> IO OffsetPosition
 -- 1. open file to bs
 -- 2. parse as long as not 0
 -- 3. read offset/physical from last element
-  bs <- mmapFileByteString "topic_partition/BaseOffset.log"
+getLastOffsetPosition bo = do 
+  bs <- mmapFileByteStringLazy "topic_partition/BaseOffset.log" Nothing
   case decodeIndex bs of
-    Left (bs, bo, e)   ->
+    Left (bs, bo, e)   -> return $ (0,0) --todo: error handling
     Right (bs, bo, ops) -> return $ last ops
 
+getLastLogOffset :: BaseOffset -> (TopicName, Partition) -> OffsetPosition -> IO Offset
+-- find last Offset in the log, start search from given offsetposition 
+-- 1. get file Size for end of file position 
+-- 2. open log file from start position given by offsetPosition to eof position 
+-- 3. parse log and get highest offset 
+getLastLogOffset base (t, p) (rel, phys) = do
+  bo <- getLastBaseOffset (t, p)
+  let path = buildLogPath bo (t,p)
+  eof <- getFileSize path
+  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phys, fromIntegral eof)
+  return $ maxOffset $ [ offset x | x <- (runGet getLog bs) ]
 
-getLastOffset :: BaseOffset -> OffsetPosition -> Offset
-getLastOffset base (rel phys) = base + rel
-
+maxOffset :: [Offset] -> Offset 
+maxOffset [] = 0 
+maxOffset [x] = x
+maxOffset (x:xs) = max x (maxOffset xs)
 
 getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
+getRelativeOffset bo o = fromIntegral o - fromIntegral bo
 
-appendSegment :: [MessageSet] -> 
-appendSegment = do
-    appendIndex
-    appendLog
+--appendSegment :: [MessageSet] -> 
+--appendSegment = do
+    --appendIndex
+    --appendLog
 
 assignOffset :: [MessageSet] -> Offset -> [MessageSet]
---assignOffset = 
+assignOffset ms o = ms
 
 
-buildIndexPath :: (Topic, Partition) -> String
-buildIndexPath (t, p) = buildPath (t, p) ".index"
+buildIndexPath :: BaseOffset -> (TopicName, Partition) -> String
+buildIndexPath bo (t, p) = buildPath bo (t, p) ".index"
 
-buildLogPath :: (Topic, Partition) -> String
-buildLogPath (t, p) = buildPath (t, p) ".log"
+buildLogPath :: BaseOffset -> (TopicName, Partition) -> String
+buildLogPath bo (t, p) = buildPath bo (t, p) ".log"
 
-buildPath :: (Topic, Partition) -> String -> String
+buildPath :: BaseOffset -> (TopicName, Partition) -> String -> String
+buildPath bo (t, p) ending = (show t) ++ "_" ++ (show p) ++ "/" ++ (show bo) ++ ending
+
+appendLog :: (TopicName, Partition) -> [MessageSet] -> IO()
+appendLog (t, p) ms = do 
+  bo <- getLastBaseOffset (t,p)
+  let path = (buildLogPath bo (t, p))
+  op <- getLastOffsetPosition bo
+  lo <- getLastLogOffset bo (t,p) op
+  BL.appendFile 
+    path $ 
+    buildMessageSets $ assignOffset (ms) $ lo
+
+    --TODO Chaining with "." does not compile. Chaining with "$" does not work
+    --yet because of IO return Types 
+    --
+    --buildMessageSets 
+    -- . assignOffset (ms) 
+    -- . getLastLogOffset bo 
+    -- . getLastOffsetPosition bo
+    -- . getLastBaseOffset (t, p) 
 
 
-appendLog :: (Topic, Partition) -> [MessageSet] -> IO()
-appendLog (t, p) ms = 
-  BL.appendFile buildLogPath (t, p) $ buildMessageSets 
-    . assignOffset (ms) 
-    . getLastOffset(getLastSegment(t,p)) 
-    . getLastOffsetPosition 
-    . getLastSegment (t, p) 
-
-
-appendIndex :: (Topic, Partition) -> IO()
-appendIndex (t, p) = do
-  BL.appendFile buildIndexPath (t, p) $ buildOffsetPostition 
-    ((getRelativeOffset $
-      getLastOffset(getLastSegment(t,p)) 
-      . getLastOffsetPosition 
-      . getLastSegment (t, p) 
-    ),
-    fileSize buildIndexPath (t, p))
+--TODO: Does not compile yet
+--appendIndex :: (TopicName, Partition) -> IO()
+--appendIndex (t, p) = do
+--  BL.appendFile buildIndexPath (t, p) $ buildOffsetPosition 
+--    ((getRelativeOffset 
+--        getLastBaseOffset  
+--        $ getLastLogOffset(getLastBaseOffset(t,p)) 
+--          . getLastOffsetPosition 
+--          . getLastBaseOffset (t, p) 
+--    ),
+--    getFileSize buildIndexPath (t, p))
 
 buildOffsetPosition :: OffsetPosition -> BL.ByteString
 buildOffsetPosition (o, p) = runPut $ do 
@@ -213,11 +245,11 @@ buildOffsetPosition (o, p) = runPut $ do
 --    else (newIndex indexPath)
 --  return ((0,0))
 
-newIndex :: String ->  IO IndexEntry
-newIndex filepath = do 
-  let e = buildIndexEntry (0,0)
-  BL.writeFile filepath e
-  return (0,0)
+--newIndex :: String ->  IO IndexEntry
+--newIndex filepath = do 
+--  let e = buildIndexEntry (0,0)
+ -- BL.writeFile filepath e
+  --return (0,0)
 
 
 
@@ -225,7 +257,9 @@ indexFile :: (Integral i) => i -> String
 indexFile o = (show $ fromIntegral o) ++ ".index"
 
 
-getFileSize :: String -> IO FileOffset
+getFileSize :: String -> IO Integer
 getFileSize path = do
-    stat <- getFileStatus path
-    return (fileSize stat)
+    hdl <- openFile path ReadMode 
+    size <- hFileSize hdl 
+    hClose hdl 
+    return size
