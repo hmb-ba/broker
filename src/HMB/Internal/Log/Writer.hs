@@ -1,5 +1,5 @@
 module HMB.Internal.Log.Writer
-( writeLog, readLog, getTopicNames ) where
+( writeLog, readLog, getTopicNames, getLastBaseOffset ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
@@ -21,6 +21,7 @@ import System.IO
 import qualified System.Posix.Files as Files
 import Data.List
 --import qualified Data.Text as Text -- for isInfixOf
+import Text.Printf
 
 type TopicStr = String 
 type PartitionStr = Int
@@ -30,8 +31,14 @@ type MessageInput = (TopicStr, PartitionStr, Log)
 logFolder :: TopicStr -> PartitionStr -> String
 logFolder t p = "log/" ++ t ++ "_" ++ show p
 
-logFile :: (Integral i) => i -> String
-logFile o = (show $ fromIntegral o) ++ ".log"
+leadingZero :: Int -> String
+leadingZero = printf "%020d"
+
+logFile :: Int -> String
+logFile o = (leadingZero o) ++ ".log"
+
+indexFile :: Int -> String
+indexFile o = (leadingZero) ++ ".index"
 
 getPath :: String -> String -> String
 getPath folder file = folder ++ "/" ++ file
@@ -41,7 +48,7 @@ buildLog o [] = BL.empty
 buildLog o (x:xs) =
   (BL.append (buildLogEntry x o) (buildLog (o + 1) xs))
 
-writeLog :: MessageInput -> IO() 
+writeLog :: MessageInput -> IO()
 writeLog (topicName, partitionNumber, log) = do
   createDirectoryIfMissing False $ logFolder topicName partitionNumber
   let filePath = getPath (logFolder topicName partitionNumber) (logFile 0)
@@ -76,7 +83,7 @@ getMaxOffsetOfLog (t, p, _) = do
   log <- readLogFromBeginning (t,p) --TODO: optimieren, dass nich gesamter log gelesen werden muss 
   return (maxOffset $ [ offset x | x <- log ])
 
--- todo: move to reader
+-- todo: move to readertail
 getLog :: Get Log
 getLog = do
   empty <- isEmpty
@@ -127,13 +134,13 @@ isDirectory x = elem x [".", ".."]
 filterRootDir :: [String] -> [String]
 filterRootDir d = filter (\x -> not $ isDirectory x) d
 
-getLastBaseOffset :: (TopicName, Partition) -> IO BaseOffset
+getLastBaseOffset :: (TopicName, Int) -> IO BaseOffset
 getLastBaseOffset (t, p) = do
   dirs <- getDirectoryContents $ getLogFolder (t, p)
   return $ maximum $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
 
-getLogFolder :: (TopicName, Partition) -> String
-getLogFolder (t, p) = "log/" ++ (show t) ++ "_" ++ show p
+getLogFolder :: (TopicName, Int) -> String
+getLogFolder (t, p) = "log/" ++ (BC.unpack t) ++ "_" ++ show p
 
 -------------------------------------------------------
 
@@ -162,11 +169,11 @@ getLastOffsetPosition bo = do
     Left (bs, bo, e)   -> return $ (0,0) --todo: error handling
     Right (bs, bo, ops) -> return $ last ops
 
-getLastLogOffset :: BaseOffset -> (TopicName, Partition) -> OffsetPosition -> IO Offset
+getLastLogOffset :: BaseOffset -> (TopicName, Int) -> OffsetPosition -> IO Offset
 -- find last Offset in the log, start search from given offsetposition 
 -- 1. get file Size for end of file position 
 -- 2. open log file from start position given by offsetPosition to eof position 
--- 3. parse log and get highest offset 
+-- 3. parse log and get highest offset  
 getLastLogOffset base (t, p) (rel, phys) = do
   bo <- getLastBaseOffset (t, p)
   let path = buildLogPath bo (t,p)
@@ -191,16 +198,16 @@ assignOffset :: [MessageSet] -> Offset -> [MessageSet]
 assignOffset ms o = ms
 
 
-buildIndexPath :: BaseOffset -> (TopicName, Partition) -> String
+buildIndexPath :: BaseOffset -> (TopicName, Int) -> String
 buildIndexPath bo (t, p) = buildPath bo (t, p) ".index"
 
-buildLogPath :: BaseOffset -> (TopicName, Partition) -> String
+buildLogPath :: BaseOffset -> (TopicName, Int) -> String
 buildLogPath bo (t, p) = buildPath bo (t, p) ".log"
 
-buildPath :: BaseOffset -> (TopicName, Partition) -> String -> String
+buildPath :: BaseOffset -> (TopicName, Int) -> String -> String
 buildPath bo (t, p) ending = (show t) ++ "_" ++ (show p) ++ "/" ++ (show bo) ++ ending
 
-appendLog :: (TopicName, Partition) -> [MessageSet] -> IO()
+appendLog :: (TopicName, Int) -> [MessageSet] -> IO()
 appendLog (t, p) ms = do 
   bo <- getLastBaseOffset (t,p)
   let path = (buildLogPath bo (t, p))

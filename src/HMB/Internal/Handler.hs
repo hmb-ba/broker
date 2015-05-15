@@ -214,6 +214,8 @@ handleRequest rm = do
 -----------------
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
+  bo <- getLastBaseOffset (BC.pack("topicX"), fromIntegral 0)
+  print bo
   w <- tryIOError( mapM writeLog [ 
                     (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
                     | x <- rqPrTopics req, y <- partitions x 
