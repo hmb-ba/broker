@@ -214,16 +214,19 @@ handleRequest rm = do
 -----------------
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
-  bo <- getLastBaseOffset (BC.pack("topicX"), fromIntegral 0)
+  bo <- getLastBaseOffset ("generated", 2)
   print bo
-  w <- tryIOError( mapM writeLog [ 
-                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
-                    | x <- rqPrTopics req, y <- partitions x 
-                          ]
-          )
-  case w of
-      Left e -> return $ Left $ PrWriteLogError 0 "todo"
-      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
+  lop <- getLastOffsetPosition ("generated", 2) bo
+  print lop
+  return $ Right C.empty
+--  w <- tryIOError( mapM writeLog [ 
+--                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
+--                    | x <- rqPrTopics req, y <- partitions x 
+--                          ]
+--          )
+--  case w of
+--      Left e -> return $ Left $ PrWriteLogError 0 "todo"
+--      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
 
 
 packProduceResponse :: ResponseMessage 

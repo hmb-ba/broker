@@ -33,7 +33,7 @@ main = do
   let payload = C.pack "bytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytes"
   let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [ payload | x <- [1..10]])
   print req
-  replicateM_ 1000 (sendRequest sock $ req)
+  replicateM_ 1 (sendRequest sock $ req)
   putStrLn "done produce"
   --threadDelay 10000000
   return ()
