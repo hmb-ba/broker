@@ -3,7 +3,8 @@ module HMB.Internal.Log.Writer
 , readLog
 , getTopicNames
 , getLastBaseOffset
-, getLastOffsetPosition 
+, getLastOffsetPosition
+, getLastLogOffset
 ) where
 
 import qualified Data.ByteString as BS
@@ -199,19 +200,28 @@ getLastOffsetPosition (t, p) bo = do
 
 -------------------------------------------------------
 
---getLastLogOffset :: BaseOffset -> (TopicStr, Int) -> OffsetPosition -> IO Offset
----- find last Offset in the log, start search from given offsetposition 
----- 1. get file Size for end of file position 
----- 2. open log file from start position given by offsetPosition to eof position 
----- 3. parse log and get highest offset  
---getLastLogOffset base (t, p) (rel, phys) = do
---  bo <- getLastBaseOffset (t, p)
---  --let path = buildLogPath bo (t,p)
---  let path = getPath (logFolder t p) (indexFile bo)
---  eof <- getFileSize path
---  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phys, fromIntegral eof)
---  return $ maxOffset $ [ offset x | x <- (runGet getLog bs) ]
---
+getFileSize :: String -> IO Integer
+getFileSize path = do
+    hdl <- openFile path ReadMode 
+    size <- hFileSize hdl 
+    hClose hdl 
+    return size
+
+getLastLogOffset :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Offset
+-- find last Offset in the log, start search from given offsetposition 
+-- 1. get file Size for end of file position 
+-- 2. open log file from start position given by offsetPosition to eof position 
+-- 3. parse log and get highest offset
+getLastLogOffset (t, p) bo (rel, phys) = do
+  let path = getPath (logFolder t p) (logFile bo)
+  -- check if file exists
+  eof <- getFileSize path
+  print $ "physical start: " ++ (show $ fromIntegral phys)
+  print $ "filesize: " ++ show eof
+  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phys, fromIntegral eof)
+  print bs
+  return $ maxOffset $ [ offset x | x <- (runGet getLog bs) ]
+
 --
 --getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
 --getRelativeOffset bo o = fromIntegral o - fromIntegral bo
@@ -285,9 +295,4 @@ getLastOffsetPosition (t, p) bo = do
 -- -- BL.writeFile filepath e
 --  --return (0,0)
 --
---getFileSize :: String -> IO Integer
---getFileSize path = do
---    hdl <- openFile path ReadMode 
---    size <- hFileSize hdl 
---    hClose hdl 
---    return size
+
