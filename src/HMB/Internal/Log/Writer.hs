@@ -207,6 +207,9 @@ getFileSize path = do
     hClose hdl 
     return size
 
+lastOffset :: Log -> Offset
+lastOffset = offset . last
+
 getLastLogOffset :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Offset
 -- find last Offset in the log, start search from given offsetposition 
 -- 1. get file Size for end of file position 
@@ -218,9 +221,17 @@ getLastLogOffset (t, p) bo (rel, phys) = do
   eof <- getFileSize path
   print $ "physical start: " ++ (show $ fromIntegral phys)
   print $ "filesize: " ++ show eof
-  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phys, fromIntegral eof)
-  print bs
-  return $ maxOffset $ [ offset x | x <- (runGet getLog bs) ]
+  bs <- mmapFileByteStringLazy path Nothing -- $ Just (fromIntegral phys, fromIntegral eof)
+  return $ lastOffset $ runGet getLog bs
+
+-------------------------------------------------------
+
+assignOffset :: Offset -> MessageSet -> MessageSet
+assignOffset o ms = MessageSet o (len ms) (message ms)
+
+continueOffset :: Offset -> [MessageSet] -> [MessageSet]
+continueOffset o [] = []
+continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 
 --
 --getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
