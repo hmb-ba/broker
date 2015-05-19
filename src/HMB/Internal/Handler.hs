@@ -220,6 +220,8 @@ handleProduceRequest req = do
   print lop
   llo <- getLastLogOffset ("generated", 2) bo lop
   print llo
+  let ms = head $ [ rqPrMessageSet y | x <- rqPrTopics req, y <- partitions x ]
+  print $ continueOffset (llo + 1) ms
   return $ Right C.empty
 --  w <- tryIOError( mapM writeLog [ 
 --                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 

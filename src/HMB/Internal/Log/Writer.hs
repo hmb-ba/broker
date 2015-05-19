@@ -5,6 +5,7 @@ module HMB.Internal.Log.Writer
 , getLastBaseOffset
 , getLastOffsetPosition
 , getLastLogOffset
+, continueOffset
 ) where
 
 import qualified Data.ByteString as BS
@@ -135,7 +136,6 @@ indexFile o = (leadingZero o) ++ ".index"
 getPath :: String -> String -> String
 getPath folder file = folder ++ "/" ++ file
 
-
 ----------------------------------------------------------
 
 
@@ -200,6 +200,7 @@ getLastOffsetPosition (t, p) bo = do
 
 -------------------------------------------------------
 
+
 getFileSize :: String -> IO Integer
 getFileSize path = do
     hdl <- openFile path ReadMode 
@@ -226,12 +227,16 @@ getLastLogOffset (t, p) bo (rel, phys) = do
 
 -------------------------------------------------------
 
+
 assignOffset :: Offset -> MessageSet -> MessageSet
 assignOffset o ms = MessageSet o (len ms) (message ms)
 
 continueOffset :: Offset -> [MessageSet] -> [MessageSet]
 continueOffset o [] = []
 continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
+
+-------------------------------------------------------
+
 
 --
 --getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
