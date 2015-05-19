@@ -6,6 +6,7 @@ module HMB.Internal.Log.Writer
 , getLastOffsetPosition
 , getLastLogOffset
 , continueOffset
+, appendLog
 ) where
 
 import qualified Data.ByteString as BS
@@ -237,6 +238,13 @@ continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 
 -------------------------------------------------------
 
+
+appendLog :: (TopicStr, Int) -> BaseOffset -> [MessageSet] -> IO()
+appendLog (t, p) bo ms = do
+  let path = getPath (logFolder t p) (logFile bo)
+  let bs = buildMessageSets ms
+  print bs
+  BL.appendFile path bs
 
 --
 --getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
