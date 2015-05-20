@@ -80,7 +80,6 @@ getMaxOffsetOfLog (t, p, _) = do
   log <- readLogFromBeginning (t,p) --TODO: optimieren, dass nich gesamter log gelesen werden muss 
   return (maxOffset $ [ offset x | x <- log ])
 
--- todo: move to readertail
 getLog :: Get Log
 getLog = do
   empty <- isEmpty
@@ -253,8 +252,8 @@ appendLog (t, p) bo ms = do
 
 --read 
 --  bos <- getBaseOffsets (t,p) 
---  let bo = getBaseOffsetFor bos o 
-
+--  let bo = getBaseOffsetFor bos o
+-------------------------------------------------------
 indexLookup :: (TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition 
 ---locate the offset/location pair for the greatest offset less than or equal
 -- to the target offset.
@@ -282,8 +281,43 @@ getBaseOffsetFor :: [BaseOffset] -> Offset -> BaseOffset
 getBaseOffsetFor [] to = 0
 getBaseOffsetFor [x] to = x
 getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head xs) then x else getBaseOffsetFor xs to
+-------------------------------------------------------
 
---
+--readLog' :: (TopicStr, Int) -> Offset -> IO [MessageSet]
+--readLog' (t, p) o = 
+
+--- searchLogFor 
+-- Search forward the log file  for the position of the last offset that is greater than or equal to the target offset
+-- and return its physical position
+
+
+
+getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO [MessageSet]
+-- ParseLog starting from given physical Position. 
+getLogFrom (t, p) bo (ro, phy) = do 
+  let path = getPath (logFolder t p) (logFile bo)
+  bs <- mmapFileByteStringLazy path Nothing -- $ Just (fromIntegral phys, fromIntegral eof)
+  return $ runGet decodeLog bs 
+
+decodeLog :: Get [MessageSet]
+decodeLog = do
+  empty <- isEmpty
+  if empty
+    then return []
+      else do ms <- messageSetParser
+              mss <- decodeLog 
+              return $ ms : mss
+
+--decodeLogFrom :: Offset -> Get MessageSet
+--decodeLogFrom to = do
+--  empty <- isEmpty
+--  if empty
+--    then return $ MessageSet 0 0 (Message 0 (Payload 0 0 0 0 BC.empty)) --TOOD: possible to work with Maybe MessageSet?
+--    else do ms <- messageSetParser
+--            if (offset ms) >= to 
+--              then return ms
+--              else decodeLogFrom to 
+
 --getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
 --getRelativeOffset bo o = fromIntegral o - fromIntegral bo
 --
