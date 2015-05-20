@@ -160,9 +160,15 @@ getLogFolder (t, p) = "log/" ++ t ++ "_" ++ show p
 -- 2. determine the offset (int) from containing files (we filter only .log files but could be .index as well)
 -- 3. return the max offset
 getLastBaseOffset :: (TopicStr, Int) -> IO BaseOffset
-getLastBaseOffset (t, p) = do
+getLastBaseOffset (t, p) = do 
+  bos <- getBaseOffsets (t, p)
+  return $ maximum bos
+
+getBaseOffsets :: (TopicStr, Int) -> IO [BaseOffset]
+getBaseOffsets (t, p) = do 
   dirs <- getDirectoryContents $ getLogFolder (t, p)
-  return $ maximum $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
+  return $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
+
 
 -------------------------------------------------------
 
@@ -200,8 +206,6 @@ getLastOffsetPosition (t, p) bo = do
     Right (bs, bo, ops) -> return $ last ops
 
 -------------------------------------------------------
-
-
 getFileSize :: String -> IO Integer
 getFileSize path = do
     hdl <- openFile path ReadMode 
@@ -245,6 +249,39 @@ appendLog (t, p) bo ms = do
   let bs = buildMessageSets ms
   print bs
   BL.appendFile path bs
+
+
+--read 
+--  bos <- getBaseOffsets (t,p) 
+--  let bo = getBaseOffsetFor bos o 
+
+indexLookup :: (TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition 
+---locate the offset/location pair for the greatest offset less than or equal
+-- to the target offset.
+indexLookup (t, p) bo to = do 
+  let path = getPath (getLogFolder (t, p)) (indexFile bo)
+  bs <- mmapFileByteStringLazy path Nothing 
+  case decodeIndex bs of
+    Left (bs, byo, e)   -> do
+        print e
+        return $ (0,0) --todo: error handling
+    Right (bs, byo, ops) -> return $ getOffsetPositionFor ops bo to 
+
+getOffsetPositionFor :: [OffsetPosition] -> BaseOffset -> Offset -> OffsetPosition 
+-- get greatest offsetPosition from list that is les than or equal target offset 
+getOffsetPositionFor [] bo to = (0, 0)
+getOffsetPositionFor [x] bo to = x
+getOffsetPositionFor (x:xs) bo to = 
+                      if ((fromIntegral $ fst $ x) + bo) <= fromIntegral to 
+                      && fromIntegral to < ((fromIntegral $ fst $ head $ xs) + bo) 
+                        then x 
+                        else getOffsetPositionFor xs bo to 
+
+getBaseOffsetFor :: [BaseOffset] -> Offset -> BaseOffset
+-- get greatest baseOffset from list that is less than or equal target offset 
+getBaseOffsetFor [] to = 0
+getBaseOffsetFor [x] to = x
+getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head xs) then x else getBaseOffsetFor xs to
 
 --
 --getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
