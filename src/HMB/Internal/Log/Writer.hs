@@ -83,7 +83,6 @@ getMaxOffsetOfLog (t, p, _) = do
   log <- readLogFromBeginning (t,p) --TODO: optimieren, dass nich gesamter log gelesen werden muss 
   return (maxOffset $ [ offset x | x <- log ])
 
--- todo: move to readertail
 getLog :: Get Log
 getLog = do
   empty <- isEmpty
@@ -102,14 +101,13 @@ readLogFromBeginning :: (String, Int) -> IO Log
 readLogFromBeginning (t, p) = parseLog $ 
     getPath (logFolder t p) (logFile 0)
 
-readLog :: (String, Int, Int) -> IO Log
-readLog (t, p, o) = do 
+readLog' :: (String, Int, Int) -> IO Log
+readLog' (t, p, o) = do 
   log <- readLogFromBeginning (t,p)
   return ([ x | x <- log, fromIntegral(offset x) >= o])
 
 getTopicNames :: IO [String]
 getTopicNames = (getDirectoryContents "log/")
-
 
 --------------
 
@@ -173,9 +171,15 @@ maxOffset' xs = maximum xs
 -- 2. determine the offset (int) from containing files (we filter only .log files but could be .index as well)
 -- 3. return the max offset
 getLastBaseOffset :: (TopicStr, Int) -> IO BaseOffset
-getLastBaseOffset (t, p) = do
+getLastBaseOffset (t, p) = do 
+  bos <- getBaseOffsets (t, p)
+  return $ maxOffset' bos
+
+getBaseOffsets :: (TopicStr, Int) -> IO [BaseOffset]
+getBaseOffsets (t, p) = do 
   dirs <- getDirectoryContents $ getLogFolder (t, p)
-  return $ maxOffset' $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
+  return $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
+
 
 -------------------------------------------------------
 
@@ -213,8 +217,6 @@ getLastOffsetPosition (t, p) bo = do
     Right (bs, bo, ops) -> return $ lastIndex ops
 
 -------------------------------------------------------
-
-
 getFileSize :: String -> IO Integer
 getFileSize path = do
     hdl <- openFile path ReadMode 
@@ -253,7 +255,6 @@ continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 -------------------------------------------------------
 
 
-
 partitionsOfTopic :: RqTopic -> (TopicStr, [Partition])
 partitionsOfTopic t = (topic, ps)
   where
@@ -283,7 +284,83 @@ appendLog (t, p, ms) = do
   print bs
   BL.appendFile path bs
 
---
+
+-------------------------------------------------------
+-- Read
+-------------------------------------------------------
+
+
+readLog :: (TopicStr, Int) -> Offset -> IO [MessageSet]
+readLog tp o = do
+  bos <- getBaseOffsets tp 
+  let bo = getBaseOffsetFor bos o
+  op <- indexLookup tp bo o 
+  log <- getLogFrom tp bo op
+  return $ filterMessageSetsFor log o 
+
+indexLookup :: (TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition 
+---locate the offset/location pair for the greatest offset less than or equal
+-- to the target offset.
+indexLookup (t, p) bo to = do 
+  let path = getPath (getLogFolder (t, p)) (indexFile bo)
+  bs <- mmapFileByteStringLazy path Nothing 
+  case decodeIndex bs of
+    Left (bs, byo, e)   -> do
+        print e
+        return $ (0,0) --todo: error handling
+    Right (bs, byo, ops) -> return $ getOffsetPositionFor ops bo to 
+
+getOffsetPositionFor :: [OffsetPosition] -> BaseOffset -> Offset -> OffsetPosition 
+-- get greatest offsetPosition from list that is les than or equal target offset 
+getOffsetPositionFor [] bo to = (0, 0)
+getOffsetPositionFor [x] bo to = x
+getOffsetPositionFor (x:xs) bo to = 
+                      if ((fromIntegral $ fst $ x) + bo) <= fromIntegral to 
+                      && fromIntegral to < ((fromIntegral $ fst $ head $ xs) + bo) 
+                        then x 
+                        else getOffsetPositionFor xs bo to 
+
+getBaseOffsetFor :: [BaseOffset] -> Offset -> BaseOffset
+-- get greatest baseOffset from list that is less than or equal target offset 
+getBaseOffsetFor [] to = 0
+getBaseOffsetFor [x] to = x
+getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head xs) then x else getBaseOffsetFor xs to
+
+-- searchLogFor 
+-- Search forward the log file  for the position of the last offset that is greater than or equal to the target offset
+-- and return its physical position
+
+getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO [MessageSet]
+-- ParseLog starting from given physical Position. 
+getLogFrom (t, p) bo (ro, phy) = do 
+  let path = getPath (logFolder t p) (logFile bo)
+  fs <- getFileSize path 
+  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
+  return $ runGet decodeLog bs 
+
+decodeLog :: Get [MessageSet]
+decodeLog = do
+  empty <- isEmpty
+  if empty
+    then return []
+      else do ms <- messageSetParser
+              mss <- decodeLog 
+              return $ ms : mss
+
+filterMessageSetsFor :: [MessageSet] -> Offset -> [MessageSet]
+filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms 
+
+
+--decodeLogFrom :: Offset -> Get MessageSet
+--decodeLogFrom to = do
+--  empty <- isEmpty
+--  if empty
+--    then return $ MessageSet 0 0 (Message 0 (Payload 0 0 0 0 BC.empty)) --TOOD: possible to work with Maybe MessageSet?
+--    else do ms <- messageSetParser
+--            if (offset ms) >= to 
+--              then return ms
+--              else decodeLogFrom to 
+
 --getRelativeOffset :: BaseOffset -> Offset -> RelativeOffset
 --getRelativeOffset bo o = fromIntegral o - fromIntegral bo
 --
