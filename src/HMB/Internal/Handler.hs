@@ -30,6 +30,8 @@ import Control.Applicative
 
 import HMB.Internal.Log
 
+import Data.Typeable
+
 ---------------
 -- error types
 ---------------
@@ -214,24 +216,32 @@ handleRequest rm = do
 -----------------
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
-  bo <- getLastBaseOffset ("generated", 2)
-  print bo
-  lop <- getLastOffsetPosition ("generated", 2) bo
-  print lop
-  llo <- getLastLogOffset ("generated", 2) bo lop
-  print llo
-  let ms = head $ [ rqPrMessageSet y | x <- rqPrTopics req, y <- partitions x ]
-  print $ continueOffset (llo + 1) ms
-  appendLog ("generated", 2) bo ms
-  return $ Right C.empty
---  w <- tryIOError( mapM writeLog [ 
---                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y ) 
+--  bo <- getLastBaseOffset ("generated", 2)
+--  print bo
+--
+--  lop <- getLastOffsetPosition ("generated", 2) bo
+--  print lop
+--
+--  llo <- getLastLogOffset ("generated", 2) bo lop
+--  print llo
+--
+--  let ms = head $ [ rqPrMessageSet y | x <- rqPrTopics req, y <- partitions x ]
+--  print $ continueOffset (llo + 1) ms
+--  --appendLog ("generated", 2) bo ms
+
+  mapM appendLog (logData req)
+
+--  w <- tryIOError( mapM appendLog [ 
+--                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
 --                    | x <- rqPrTopics req, y <- partitions x 
 --                          ]
 --          )
 --  case w of
 --      Left e -> return $ Left $ PrWriteLogError 0 "todo"
 --      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
+--
+  return $ Right C.empty
+
 
 
 packProduceResponse :: ResponseMessage 

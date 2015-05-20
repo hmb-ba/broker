@@ -7,6 +7,7 @@ module HMB.Internal.Log.Writer
 , getLastLogOffset
 , continueOffset
 , appendLog
+, logData
 ) where
 
 import qualified Data.ByteString as BS
@@ -56,6 +57,12 @@ writeLog (topicName, partitionNumber, log) = do
 --    Left e -> return $ Left $ show e 
 --    Right io -> return $ Right io 
 
+maxOffset :: [Offset] -> Offset
+maxOffset [] = 0
+maxOffset [x] = x
+maxOffset (x:xs) = max x (maxOffset xs)
+
+
 appendToLog :: String -> MessageInput -> IO() 
 appendToLog filepath (t, p, log)  = do 
   o <- getMaxOffsetOfLog (t, p, log)
@@ -70,10 +77,6 @@ newLog filepath (t, p, log) = do
   BL.writeFile filepath l
   return ()
 
-maxOffset :: [Offset] -> Offset 
-maxOffset [] = 0 
-maxOffset [x] = x
-maxOffset (x:xs) = max x (maxOffset xs)
 
 getMaxOffsetOfLog :: MessageInput -> IO Offset
 getMaxOffsetOfLog (t, p, _) = do 
@@ -137,6 +140,11 @@ indexFile o = (leadingZero o) ++ ".index"
 getPath :: String -> String -> String
 getPath folder file = folder ++ "/" ++ file
 
+lastIndex :: [OffsetPosition] -> OffsetPosition
+lastIndex [] = (0,0)
+lastIndex xs = last xs
+
+
 ----------------------------------------------------------
 
 
@@ -155,6 +163,11 @@ filterRootDir d = filter (\x -> not $ isDirectory x) d
 getLogFolder :: (TopicStr, Int) -> String
 getLogFolder (t, p) = "log/" ++ t ++ "_" ++ show p
 
+maxOffset' :: [Int] -> Int
+maxOffset' [] = 0
+maxOffset' [x] = x
+maxOffset' xs = maximum xs
+
 -- the highest number of available log/index files
 -- 1. list directory (log folder)
 -- 2. determine the offset (int) from containing files (we filter only .log files but could be .index as well)
@@ -162,7 +175,7 @@ getLogFolder (t, p) = "log/" ++ t ++ "_" ++ show p
 getLastBaseOffset :: (TopicStr, Int) -> IO BaseOffset
 getLastBaseOffset (t, p) = do
   dirs <- getDirectoryContents $ getLogFolder (t, p)
-  return $ maximum $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
+  return $ maxOffset' $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
 
 -------------------------------------------------------
 
@@ -197,7 +210,7 @@ getLastOffsetPosition (t, p) bo = do
     Left (bs, bo, e)   -> do
         print e
         return $ (0,0) --todo: error handling
-    Right (bs, bo, ops) -> return $ last ops
+    Right (bs, bo, ops) -> return $ lastIndex ops
 
 -------------------------------------------------------
 
@@ -210,7 +223,8 @@ getFileSize path = do
     return size
 
 lastOffset :: Log -> Offset
-lastOffset = offset . last
+lastOffset [] = 0
+lastOffset xs = (offset . last) xs
 
 getLastLogOffset :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Offset
 -- find last Offset in the log, start search from given offsetposition 
@@ -239,10 +253,33 @@ continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 -------------------------------------------------------
 
 
-appendLog :: (TopicStr, Int) -> BaseOffset -> [MessageSet] -> IO()
-appendLog (t, p) bo ms = do
+
+partitionsOfTopic :: RqTopic -> (TopicStr, [Partition])
+partitionsOfTopic t = (topic, ps)
+  where
+    topic = BC.unpack $ rqTopicName t
+    ps = partitions t
+
+setsOfPartitions :: (TopicStr, [Partition]) -> [(TopicStr, Int, [MessageSet])]
+setsOfPartitions (tn, ps) = map (partitionSet tn) ps
+
+partitionSet :: TopicStr -> Partition -> (TopicStr, Int, [MessageSet])
+partitionSet tn p = (tn, pn, ms)
+  where
+    pn = fromIntegral $ rqPrPartitionNumber p
+    ms = rqPrMessageSet p
+
+logData :: Request -> [(TopicStr, Int, [MessageSet])]
+logData r = concat $ map (setsOfPartitions . partitionsOfTopic) (rqPrTopics r)
+
+appendLog :: (TopicStr, Int, [MessageSet]) -> IO()
+appendLog (t, p, ms) = do
+  bo  <- getLastBaseOffset (t, p)
+  lop <- getLastOffsetPosition (t, p) bo
+  llo <- getLastLogOffset (t, p) bo lop
   let path = getPath (logFolder t p) (logFile bo)
-  let bs = buildMessageSets ms
+  let bs = buildMessageSets $ continueOffset (llo + 1) ms
+
   print bs
   BL.appendFile path bs
 
