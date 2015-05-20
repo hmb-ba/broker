@@ -241,7 +241,6 @@ continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 
 -------------------------------------------------------
 
-
 appendLog :: (TopicStr, Int) -> BaseOffset -> [MessageSet] -> IO()
 appendLog (t, p) bo ms = do
   let path = getPath (logFolder t p) (logFile bo)
@@ -249,11 +248,14 @@ appendLog (t, p) bo ms = do
   print bs
   BL.appendFile path bs
 
+readLog' :: (TopicStr, Int) -> Offset -> IO [MessageSet]
+readLog' tp o = do
+  bos <- getBaseOffsets tp 
+  let bo = getBaseOffsetFor bos o
+  op <- indexLookup tp bo o 
+  log <- getLogFrom tp bo op
+  return $ filterMessageSetsFor log o 
 
---read 
---  bos <- getBaseOffsets (t,p) 
---  let bo = getBaseOffsetFor bos o
--------------------------------------------------------
 indexLookup :: (TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition 
 ---locate the offset/location pair for the greatest offset less than or equal
 -- to the target offset.
@@ -281,16 +283,10 @@ getBaseOffsetFor :: [BaseOffset] -> Offset -> BaseOffset
 getBaseOffsetFor [] to = 0
 getBaseOffsetFor [x] to = x
 getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head xs) then x else getBaseOffsetFor xs to
--------------------------------------------------------
 
---readLog' :: (TopicStr, Int) -> Offset -> IO [MessageSet]
---readLog' (t, p) o = 
-
---- searchLogFor 
+-- searchLogFor 
 -- Search forward the log file  for the position of the last offset that is greater than or equal to the target offset
 -- and return its physical position
-
-
 
 getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO [MessageSet]
 -- ParseLog starting from given physical Position. 
@@ -307,6 +303,10 @@ decodeLog = do
       else do ms <- messageSetParser
               mss <- decodeLog 
               return $ ms : mss
+
+filterMessageSetsFor :: [MessageSet] -> Offset -> [MessageSet]
+filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms 
+
 
 --decodeLogFrom :: Offset -> Get MessageSet
 --decodeLogFrom to = do
