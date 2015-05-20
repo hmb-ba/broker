@@ -98,14 +98,13 @@ readLogFromBeginning :: (String, Int) -> IO Log
 readLogFromBeginning (t, p) = parseLog $ 
     getPath (logFolder t p) (logFile 0)
 
-readLog :: (String, Int, Int) -> IO Log
-readLog (t, p, o) = do 
+readLog' :: (String, Int, Int) -> IO Log
+readLog' (t, p, o) = do 
   log <- readLogFromBeginning (t,p)
   return ([ x | x <- log, fromIntegral(offset x) >= o])
 
 getTopicNames :: IO [String]
 getTopicNames = (getDirectoryContents "log/")
-
 
 --------------
 
@@ -248,8 +247,8 @@ appendLog (t, p) bo ms = do
   print bs
   BL.appendFile path bs
 
-readLog' :: (TopicStr, Int) -> Offset -> IO [MessageSet]
-readLog' tp o = do
+readLog :: (TopicStr, Int) -> Offset -> IO [MessageSet]
+readLog tp o = do
   bos <- getBaseOffsets tp 
   let bo = getBaseOffsetFor bos o
   op <- indexLookup tp bo o 
@@ -292,7 +291,8 @@ getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO [MessageSet]
 -- ParseLog starting from given physical Position. 
 getLogFrom (t, p) bo (ro, phy) = do 
   let path = getPath (logFolder t p) (logFile bo)
-  bs <- mmapFileByteStringLazy path Nothing -- $ Just (fromIntegral phys, fromIntegral eof)
+  fs <- getFileSize path 
+  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
   return $ runGet decodeLog bs 
 
 decodeLog :: Get [MessageSet]

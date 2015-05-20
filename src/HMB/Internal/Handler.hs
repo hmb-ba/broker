@@ -256,7 +256,7 @@ packProduceResponse =
 
 packPartitionsToFtRsPayload :: TopicName -> Partition -> IO RsPayload
 packPartitionsToFtRsPayload t p = do
-    log <- readLog (BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p, fromIntegral $ rqFtFetchOffset p)
+    log <- readLog (BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
     return $ RsFtPayload
         0
         0
@@ -277,7 +277,7 @@ handleFetchRequest :: Request -> IO (Either HandleError BL.ByteString)
 handleFetchRequest req = do
   w <- tryIOError(liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req))
   case w of 
-    Left e -> return $ Left $ FtReadLogError 0 "todo"
+    Left e -> return $ Left $ FtReadLogError 0 $ show e
     Right rsms -> return $ Right $ buildFtRsMessage rsms
 
 
