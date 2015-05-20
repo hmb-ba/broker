@@ -236,10 +236,12 @@ getLastLogOffset :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Offset
 getLastLogOffset (t, p) bo (rel, phys) = do
   let path = getPath (logFolder t p) (logFile bo)
   -- check if file exists
-  eof <- getFileSize path
-  print $ "physical start: " ++ (show $ fromIntegral phys)
-  print $ "filesize: " ++ show eof
-  bs <- mmapFileByteStringLazy path Nothing -- $ Just (fromIntegral phys, fromIntegral eof)
+  fs <- getFileSize path
+  --print $ "physical start: " ++ (show $ fromIntegral phys)
+  --print $ "filesize: " ++ show fs
+  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phys, (fromIntegral (fs) - fromIntegral phys))
+  --Nothing -- $ Just (fromIntegral phys, fromIntegral eof)
+  --print bs
   return $ lastOffset $ runGet getLog bs
 
 -------------------------------------------------------
@@ -279,9 +281,8 @@ appendLog (t, p, ms) = do
   lop <- getLastOffsetPosition (t, p) bo
   llo <- getLastLogOffset (t, p) bo lop
   let path = getPath (logFolder t p) (logFile bo)
-  let bs = buildMessageSets $ continueOffset (llo + 1) ms
-
-  print bs
+  let bs = buildMessageSets $ ms --continueOffset (llo + 1) ms
+  --print bs
   BL.appendFile path bs
 
 
