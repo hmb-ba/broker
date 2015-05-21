@@ -88,7 +88,7 @@ initSocket = do
 --------------------------
 -- Initialize Request Channel
 ---------------------------
-type ChanMessage = ((Socket, SockAddr), BS.ByteString)
+type ChanMessage = ((Socket, SockAddr), BL.ByteString)
 type RequestChan = Chan ChanMessage
 
 initReqChan :: IO RequestChan
@@ -123,44 +123,38 @@ runConnection conn chan True = do
       handleSocketError conn  e
       runConnection conn chan False
     Right input -> do 
-     --- AS A TEST WE DO HANDLING HERE NOT CHANNELING
-      --print input
-      threadDelay 5000
---      let lazyReq = BL.fromChunks [input]
---      case readRequest lazyReq of
---        Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
---        Right (bs, bo, rm) -> do
---          res <- handleRequest rm
---          case res  of
---            Left e -> handleHandlerError conn e
---            Right bs -> writeToResChan conn chan (BL.toStrict bs)
       writeToReqChan conn chan input
-      --putStrLn "***Request Received***"
-
       runConnection conn chan True
 runConnection conn chan False = return () --TODO: Better solution for breaking out the loop? 
 
-recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BS.ByteString)
+recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
 recvFromSock (sock, sockaddr) =  do 
-  respLen <- try (SB.recv sock (4 :: Int)) :: IO (Either SomeException BS.ByteString)
+  respLen <- try (SBL.recv sock (4 :: Int64)) :: IO (Either SomeException BL.ByteString)
   case respLen of 
     Left e -> return $ Left $ SocketRecvError $ show e
     Right rl -> do
       let parsedLength = getLength $ rl 
-      print $ "parse length from sock: " ++ (show parsedLength)
       case parsedLength of 
-        Left e -> return $ Left $ SocketRecvError $ show e 
-        Right l ->  do 
-          req <- SB.recv sock $ l  -- TODO: Socket Error handling :: IO (Either SomeException BS.ByteString)
-          --print req
+        Left (b, bo, e) -> return $ Left $ SocketRecvError $ show e 
+        Right (b, bo, l) ->  do 
+          req <- recvExactly sock l  -- TODO: Socket Error handling :: IO (Either SomeException BS.ByteString)
           return $! Right req
-     -- case response offsetposition
-     --   Left e -> return $ Left $ SocketRecvError $ show e
-     --   Right bs -> return $ Right bs
-  where 
-    getLength = S.runGet $ fromIntegral <$> S.getWord32be
+   where
+      getLength = runGetOrFail $ fromIntegral <$> getWord32be
 
-writeToReqChan :: (Socket, SockAddr) -> RequestChan -> BS.ByteString -> IO()
+-- Because Socket.Recv: may return fewer bytes than specified
+recvExactly :: Socket -> Int64 -> IO BL.ByteString 
+recvExactly sock size = BL.concat . reverse <$> loop [] 0 
+  where
+    loop chunks bytesRead
+        | bytesRead >= size = return chunks
+        | otherwise = do  
+            chunk <- SBL.recv sock (size - bytesRead)
+            if BL.null chunk 
+              then return chunks 
+              else loop (chunk:chunks) $! bytesRead + BL.length chunk 
+
+writeToReqChan :: (Socket, SockAddr) -> RequestChan -> BL.ByteString -> IO()
 writeToReqChan conn chan req = writeChan chan (conn, req)
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
@@ -174,8 +168,8 @@ handleSocketError (sock, sockaddr) e = do
 runResponder :: ResponseChan -> IO() 
 runResponder chan = do 
   (conn, res) <- readChan chan 
-  let lazyRes = BL.fromChunks [res]
-  res <- sendResponse conn lazyRes 
+  --let lazyRes = BL.fromChunks [res]
+  res <- sendResponse conn res 
   case res of 
     Left e -> handleSocketError conn $ SocketSendError $ show e ---TODO: What to do with responses when client disconnected?
     Right io -> return io
@@ -190,22 +184,20 @@ sendResponse (socket, addr) responsemessage = try(SBL.sendAll socket $ responsem
 runApiHandler :: RequestChan -> ResponseChan -> IO()
 runApiHandler rqChan rsChan = do
   (conn, req) <- readChan rqChan
-  let lazyReq = BL.fromChunks [req]
-  print "here:"
-  --print $ readRequest lazyReq
-  case readRequest lazyReq of
+  --let lazyReq = BL.fromChunks [req]
+  case readRequest req of
     Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
     Right (bs, bo, rm) -> do
       res <- handleRequest rm
       case res  of
         Left e -> handleHandlerError conn e
-        Right bs -> writeToResChan conn rsChan (BL.toStrict bs)
+        Right bs -> writeToResChan conn rsChan (bs)
   runApiHandler rqChan rsChan
 
 readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
 readRequest a = runGetOrFail requestMessageParser a
 
-writeToResChan :: (Socket, SockAddr) -> ResponseChan -> BS.ByteString -> IO()
+writeToResChan :: (Socket, SockAddr) -> ResponseChan -> BL.ByteString -> IO()
 writeToResChan conn chan res = writeChan chan (conn, res)
 
 handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
@@ -242,20 +234,8 @@ handleRequest rm = do
 -----------------
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
---  bo <- getLastBaseOffset ("generated", 2)
---  print bo
---
---  lop <- getLastOffsetPosition ("generated", 2) bo
---  print lop
---
---  llo <- getLastLogOffset ("generated", 2) bo lop
---  print llo
---
---  let ms = head $ [ rqPrMessageSet y | x <- rqPrTopics req, y <- partitions x ]
---  print $ continueOffset (llo + 1) ms
---  --appendLog ("generated", 2) bo ms
-
-  --mapM appendLog (logData req)
+  --TODO: 
+  mapM appendLog (logData req)
 
 --  w <- tryIOError( mapM appendLog [ 
 --                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
@@ -267,8 +247,6 @@ handleProduceRequest req = do
 --      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
 --
   return $ Right C.empty
-
-
 
 packProduceResponse :: ResponseMessage 
 packProduceResponse = 
