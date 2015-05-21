@@ -1,6 +1,6 @@
 module HMB.Internal.Log
-( writeLog
-, readLog
+(-- writeLog
+ readLog
 , getTopicNames
 , getLastBaseOffset
 , getLastOffsetPosition
@@ -27,7 +27,7 @@ import Control.Applicative
 import System.IO.MMap
 import System.IO
 --import System.Posix.Types --for file size 
-import qualified System.Posix.Files as Files
+--import qualified System.Posix.Files as Files
 import Data.List
 --import qualified Data.Text as Text -- for isInfixOf
 import Text.Printf
@@ -40,18 +40,18 @@ type MessageInput = (TopicStr, PartitionStr, Log)
 type PartitionStr = Int
 
 
-buildLog :: Offset -> Log -> BL.ByteString
-buildLog o [] = BL.empty
-buildLog o (x:xs) =
-  (BL.append (buildLogEntry x o) (buildLog (o + 1) xs))
+--buildLog :: Offset -> Log -> BL.ByteString
+--buildLog o [] = BL.empty
+--buildLog o (x:xs) =
+--  (BL.append (buildLogEntry x o) (buildLog (o + 1) xs))
 
-writeLog :: MessageInput -> IO()
-writeLog (topicName, partitionNumber, log) = do
-  createDirectoryIfMissing False $ logFolder topicName partitionNumber
-  let filePath = getPath (logFolder topicName partitionNumber) (logFile 0)
-  ifM (doesFileExist filePath) 
-      (appendToLog filePath (topicName,partitionNumber, log)) 
-      (newLog filePath (topicName,partitionNumber, log))
+--writeLog :: MessageInput -> IO()
+--writeLog (topicName, partitionNumber, log) = do
+--  createDirectoryIfMissing False $ logFolder topicName partitionNumber
+--  let filePath = getPath (logFolder topicName partitionNumber) (logFile 0)
+--  ifM (doesFileExist filePath) 
+--      (appendToLog filePath (topicName,partitionNumber, log)) 
+--      (newLog filePath (topicName,partitionNumber, log))
 
 --writeLogOrFail :: MessageInput -> IO(Either String ())
 --writeLogOrFail input = do
@@ -66,19 +66,19 @@ maxOffset [x] = x
 maxOffset (x:xs) = max x (maxOffset xs)
 
 
-appendToLog :: String -> MessageInput -> IO() 
-appendToLog filepath (t, p, log)  = do 
-  o <- getMaxOffsetOfLog (t, p, log)
-  print o  --TODO: is needed for preventing file lock ...
-  let l =  buildLog (o + 1) log
-  BL.appendFile filepath l
-  return ()
+--appendToLog :: String -> MessageInput -> IO() 
+--appendToLog filepath (t, p, log)  = do 
+--  o <- getMaxOffsetOfLog (t, p, log)
+--  print o  --TODO: is needed for preventing file lock ...
+--  let l =  buildLog (o + 1) log
+--  BL.appendFile filepath l
+--  return ()
 
-newLog :: String -> MessageInput -> IO()
-newLog filepath (t, p, log) = do 
-  let l = buildLog 0 log
-  BL.writeFile filepath l
-  return ()
+--newLog :: String -> MessageInput -> IO()
+--newLog filepath (t, p, log) = do 
+--  let l = buildLog 0 log
+--  BL.writeFile filepath l
+--  return ()
 
 
 getMaxOffsetOfLog :: MessageInput -> IO Offset
