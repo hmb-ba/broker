@@ -123,14 +123,17 @@ runConnection conn chan True = do
       handleSocketError conn  e
       runConnection conn chan False
     Right input -> do 
-      --let lazyReq = BL.fromChunks [input]
-      --case readRequest lazyReq of
-        --Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
-        --Right (bs, bo, rm) -> do
-          --res <- handleRequest rm
-          --case res  of
-           -- Left e -> handleHandlerError conn e
-           -- Right bs -> writeToResChan conn chan (BL.toStrict bs)
+     --- AS A TEST WE DO HANDLING HERE NOT CHANNELING
+      --print input
+      threadDelay 5000
+--      let lazyReq = BL.fromChunks [input]
+--      case readRequest lazyReq of
+--        Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
+--        Right (bs, bo, rm) -> do
+--          res <- handleRequest rm
+--          case res  of
+--            Left e -> handleHandlerError conn e
+--            Right bs -> writeToResChan conn chan (BL.toStrict bs)
       writeToReqChan conn chan input
       --putStrLn "***Request Received***"
 
@@ -144,10 +147,10 @@ recvFromSock (sock, sockaddr) =  do
     Left e -> return $ Left $ SocketRecvError $ show e
     Right rl -> do
       let parsedLength = getLength $ rl 
+      print $ "parse length from sock: " ++ (show parsedLength)
       case parsedLength of 
         Left e -> return $ Left $ SocketRecvError $ show e 
         Right l ->  do 
-          print $"Receive:" ++ show l
           req <- SB.recv sock $ l  -- TODO: Socket Error handling :: IO (Either SomeException BS.ByteString)
           --print req
           return $! Right req
@@ -188,6 +191,8 @@ runApiHandler :: RequestChan -> ResponseChan -> IO()
 runApiHandler rqChan rsChan = do
   (conn, req) <- readChan rqChan
   let lazyReq = BL.fromChunks [req]
+  print "here:"
+  --print $ readRequest lazyReq
   case readRequest lazyReq of
     Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
     Right (bs, bo, rm) -> do
@@ -206,7 +211,7 @@ writeToResChan conn chan res = writeChan chan (conn, res)
 handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
 handleHandlerError (s, a) (ParseRequestError e) = do
     putStrLn $ (show "[ParseError]: ") ++ e
-    sClose s
+    --sClose s
     putStrLn $ "***Host " ++ (show a) ++ " disconnected ***"
 handleHandlerError (s, a) (PrWriteLogError o e) = do
     putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
@@ -250,7 +255,7 @@ handleProduceRequest req = do
 --  print $ continueOffset (llo + 1) ms
 --  --appendLog ("generated", 2) bo ms
 
-  mapM appendLog (logData req)
+  --mapM appendLog (logData req)
 
 --  w <- tryIOError( mapM appendLog [ 
 --                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
