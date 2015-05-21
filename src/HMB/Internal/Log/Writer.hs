@@ -282,14 +282,26 @@ appendLog (t, p, ms) = do
   llo <- getLastLogOffset (t, p) bo lop
   let path = getPath (logFolder t p) (logFile bo)
   let bs = buildMessageSets $ ms --continueOffset (llo + 1) ms
-  --print bs
+  fs <- getFileSize path 
+  -- Append Index (need to be made before log append)
+  let ro = fromIntegral(llo) - bo + 1 -- calculate relativeOffset for Index 
+ --appendIndex (t, p) bo (ro, fs) -- Type problem 
   BL.appendFile path bs
 
+appendIndex :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO()
+appendIndex (t, p) bo op = do 
+  let path = getPath (logFolder t p) (indexFile bo) 
+  let bs = buildOffsetPosition op
+  BL.appendFile path bs 
+
+buildOffsetPosition :: OffsetPosition -> BL.ByteString
+buildOffsetPosition (o, p) = runPut $ do 
+    putWord32be o
+    putWord32be p
 
 -------------------------------------------------------
 -- Read
 -------------------------------------------------------
-
 
 readLog :: (TopicStr, Int) -> Offset -> IO [MessageSet]
 readLog tp o = do
@@ -402,7 +414,15 @@ filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms
 --    -- . getLastOffsetPosition bo
 --    -- . getLastBaseOffset (t, p) 
 --
---
+----readLastIndexEntry :: (TopicStr, PartitionStr) ->  IO IndexEntry
+----readLastIndexEntry (topic, partition) = do 
+----  let indexPath = getPath (logFolder topic partition) (indexFile 0) 
+----  ex <- doesFileExist indexPath
+----  if not ex 
+----    then (newIndex indexPath)
+----    else (newIndex indexPath)
+----  return ((0,0))
+
 ----TODO: Does not compile yet
 ----appendIndex :: (TopicName, Partition) -> IO()
 ----appendIndex (t, p) = do
@@ -415,19 +435,7 @@ filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms
 ----    ),
 ----    getFileSize buildIndexPath (t, p))
 --
---buildOffsetPosition :: OffsetPosition -> BL.ByteString
---buildOffsetPosition (o, p) = runPut $ do 
---  putWord32be o
---  putWord32be p 
-----readLastIndexEntry :: (TopicStr, PartitionStr) ->  IO IndexEntry
-----readLastIndexEntry (topic, partition) = do 
-----  let indexPath = getPath (logFolder topic partition) (indexFile 0) 
-----  ex <- doesFileExist indexPath
-----  if not ex 
-----    then (newIndex indexPath)
-----    else (newIndex indexPath)
-----  return ((0,0))
---
+----
 ----newIndex :: String ->  IO IndexEntry
 ----newIndex filepath = do 
 ----  let e = buildIndexEntry (0,0)
