@@ -10,8 +10,12 @@ module HMB.Internal.Handler
 
 import Network.Socket 
 import qualified Network.Socket.ByteString.Lazy as SBL
+import qualified Network.Socket.ByteString as SB
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
+
+import qualified Data.Serialize.Get as S
 
 import Data.Int
 import System.IO 
@@ -84,7 +88,7 @@ initSocket = do
 --------------------------
 -- Initialize Request Channel
 ---------------------------
-type ChanMessage = ((Socket, SockAddr), BL.ByteString)
+type ChanMessage = ((Socket, SockAddr), BS.ByteString)
 type RequestChan = Chan ChanMessage
 
 initReqChan :: IO RequestChan
@@ -119,26 +123,41 @@ runConnection conn chan True = do
       handleSocketError conn  e
       runConnection conn chan False
     Right input -> do 
+      --let lazyReq = BL.fromChunks [input]
+      --case readRequest lazyReq of
+        --Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
+        --Right (bs, bo, rm) -> do
+          --res <- handleRequest rm
+          --case res  of
+           -- Left e -> handleHandlerError conn e
+           -- Right bs -> writeToResChan conn chan (BL.toStrict bs)
       writeToReqChan conn chan input
       --putStrLn "***Request Received***"
 
       runConnection conn chan True
 runConnection conn chan False = return () --TODO: Better solution for breaking out the loop? 
 
-recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
+recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BS.ByteString)
 recvFromSock (sock, sockaddr) =  do 
-  respLen <- try (SBL.recv sock (4 :: Int64)) :: IO (Either SomeException BL.ByteString)
-  case respLen of
+  respLen <- try (SB.recv sock (4 :: Int)) :: IO (Either SomeException BS.ByteString)
+  case respLen of 
     Left e -> return $ Left $ SocketRecvError $ show e
     Right rl -> do
-      response <- try (SBL.recv sock $ getLength $ rl) :: IO (Either SomeException BL.ByteString)
-      case response of
-        Left e -> return $ Left $ SocketRecvError $ show e
-        Right bs -> return $ Right bs
+      let parsedLength = getLength $ rl 
+      case parsedLength of 
+        Left e -> return $ Left $ SocketRecvError $ show e 
+        Right l ->  do 
+          print $"Receive:" ++ show l
+          req <- SB.recv sock $ l  -- TODO: Socket Error handling :: IO (Either SomeException BS.ByteString)
+          --print req
+          return $! Right req
+     -- case response offsetposition
+     --   Left e -> return $ Left $ SocketRecvError $ show e
+     --   Right bs -> return $ Right bs
   where 
-    getLength = runGet $ fromIntegral <$> getWord32be
+    getLength = S.runGet $ fromIntegral <$> S.getWord32be
 
-writeToReqChan :: (Socket, SockAddr) -> RequestChan -> BL.ByteString -> IO()
+writeToReqChan :: (Socket, SockAddr) -> RequestChan -> BS.ByteString -> IO()
 writeToReqChan conn chan req = writeChan chan (conn, req)
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
@@ -152,7 +171,8 @@ handleSocketError (sock, sockaddr) e = do
 runResponder :: ResponseChan -> IO() 
 runResponder chan = do 
   (conn, res) <- readChan chan 
-  res <- sendResponse conn res 
+  let lazyRes = BL.fromChunks [res]
+  res <- sendResponse conn lazyRes 
   case res of 
     Left e -> handleSocketError conn $ SocketSendError $ show e ---TODO: What to do with responses when client disconnected?
     Right io -> return io
@@ -167,19 +187,20 @@ sendResponse (socket, addr) responsemessage = try(SBL.sendAll socket $ responsem
 runApiHandler :: RequestChan -> ResponseChan -> IO()
 runApiHandler rqChan rsChan = do
   (conn, req) <- readChan rqChan
-  case readRequest req of
+  let lazyReq = BL.fromChunks [req]
+  case readRequest lazyReq of
     Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
     Right (bs, bo, rm) -> do
       res <- handleRequest rm
       case res  of
         Left e -> handleHandlerError conn e
-        Right bs -> writeToResChan conn rsChan bs
+        Right bs -> writeToResChan conn rsChan (BL.toStrict bs)
   runApiHandler rqChan rsChan
 
 readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
 readRequest a = runGetOrFail requestMessageParser a
 
-writeToResChan :: (Socket, SockAddr) -> ResponseChan -> BL.ByteString -> IO()
+writeToResChan :: (Socket, SockAddr) -> ResponseChan -> BS.ByteString -> IO()
 writeToResChan conn chan res = writeChan chan (conn, res)
 
 handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
