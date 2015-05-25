@@ -1,4 +1,4 @@
-module HMB.Internal.Handler 
+module HMB.Internal.Handler
 ( handleRequest
 , initSocket
 , initReqChan
@@ -6,9 +6,9 @@ module HMB.Internal.Handler
 , runAcceptor
 , runApiHandler
 , runResponder
-) where 
+) where
 
-import Network.Socket 
+import Network.Socket
 import qualified Network.Socket.ByteString.Lazy as SBL
 import qualified Network.Socket.ByteString as SB
 import qualified Data.ByteString.Lazy as BL
@@ -18,7 +18,7 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.Serialize.Get as S
 
 import Data.Int
-import System.IO 
+import System.IO
 import System.Environment
 import Control.Concurrent
 import Control.Concurrent.Chan
@@ -65,17 +65,17 @@ data SocketError =
       | SocketSendError String
         deriving Show
 
-data HandleError = 
+data HandleError =
         PrWriteLogError Int String
       | PrPackError String
-      | ParseRequestError String 
+      | ParseRequestError String
       | FtReadLogError Int String
       | SendResponseError String
       | UnknownRqError
         deriving Show
 
 ---------------------------
---Initialize Socket 
+--Initialize Socket
 ---------------------------
 initSocket :: IO Socket
 initSocket = do
@@ -105,7 +105,7 @@ initResChan = newChan
 -----------------------------
 -- Acceptor Thread
 ----------------------------
-runAcceptor :: Socket -> RequestChan -> IO()
+runAcceptor :: Socket -> RequestChan -> IO ()
 runAcceptor sock chan =  do
   (conSock, sockAddr) <- accept sock
   putStrLn $ "***Host " ++ (show sockAddr) ++ " connected***"
@@ -115,45 +115,50 @@ runAcceptor sock chan =  do
 -----------------------------
 --Connection Processor Thread
 ----------------------------
-runConnection :: (Socket, SockAddr) -> RequestChan -> Bool -> IO()
-runConnection conn chan True = do 
+runConnection :: (Socket, SockAddr) -> RequestChan -> Bool -> IO ()
+runConnection conn chan True = do
   r <- recvFromSock conn
   case (r) of
-    Left e -> do 
+    Left e -> do
       handleSocketError conn  e
       runConnection conn chan False
-    Right input -> do 
+    Right input -> do
       writeToReqChan conn chan input
       runConnection conn chan True
-runConnection conn chan False = return () --TODO: Better solution for breaking out the loop? 
+runConnection conn chan False = return () --TODO: Better solution for breaking out the loop?
 
 recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError BL.ByteString)
-recvFromSock (sock, sockaddr) =  do 
+recvFromSock (sock, sockaddr) =  do
+  -- FIXME (meiersi): it is very bad stayle to indiscriminately catch
+  -- 'SomeException'! It leads to losing asynchronous exceptions like
+  -- 'ThreadKilled' or 'UserInterrupt'. You should just catch exactly the
+  -- exceptions that you want to handle.
   respLen <- try (SBL.recv sock (4 :: Int64)) :: IO (Either SomeException BL.ByteString)
-  case respLen of 
+  case respLen of
     Left e -> return $ Left $ SocketRecvError $ show e
     Right rl -> do
-      let parsedLength = getLength $ rl 
-      case parsedLength of 
-        Left (b, bo, e) -> return $ Left $ SocketRecvError $ show e 
-        Right (b, bo, l) ->  do 
+      let parsedLength = getLength $ rl
+      case parsedLength of
+        Left (b, bo, e) -> return $ Left $ SocketRecvError $ show e
+        Right (b, bo, l) ->  do
           req <- recvExactly sock l  -- TODO: Socket Error handling :: IO (Either SomeException BS.ByteString)
           return $! Right req
    where
       getLength = runGetOrFail $ fromIntegral <$> getWord32be
 
 -- Because Socket.Recv: may return fewer bytes than specified
-recvExactly :: Socket -> Int64 -> IO BL.ByteString 
-recvExactly sock size = BL.concat . reverse <$> loop [] 0 
+recvExactly :: Socket -> Int64 -> IO BL.ByteString
+recvExactly sock size = BL.concat . reverse <$> loop [] 0
   where
     loop chunks bytesRead
         | bytesRead >= size = return chunks
-        | otherwise = do  
+        | otherwise = do
             chunk <- SBL.recv sock (size - bytesRead)
-            if BL.null chunk 
-              then return chunks 
-              else loop (chunk:chunks) $! bytesRead + BL.length chunk 
+            if BL.null chunk
+              then return chunks
+              else loop (chunk:chunks) $! bytesRead + BL.length chunk
 
+-- FIXME (meiersi): why so skimpy on spaces? 'IO()' is NOT idiomatic Haskell ;-)
 writeToReqChan :: (Socket, SockAddr) -> RequestChan -> BL.ByteString -> IO()
 writeToReqChan conn chan req = writeChan chan (conn, req)
 
@@ -165,15 +170,15 @@ handleSocketError (sock, sockaddr) e = do
 -----------------------
 -- Response Processor Thread
 -----------------------
-runResponder :: ResponseChan -> IO() 
-runResponder chan = do 
-  (conn, res) <- readChan chan 
+runResponder :: ResponseChan -> IO()
+runResponder chan = do
+  (conn, res) <- readChan chan
   --let lazyRes = BL.fromChunks [res]
-  res <- sendResponse conn res 
-  case res of 
+  res <- sendResponse conn res
+  case res of
     Left e -> handleSocketError conn $ SocketSendError $ show e ---TODO: What to do with responses when client disconnected?
     Right io -> return io
-  runResponder chan 
+  runResponder chan
 
 sendResponse :: (Socket, SockAddr) -> BL.ByteString -> IO(Either SomeException ())
 sendResponse (socket, addr) responsemessage = try(SBL.sendAll socket $ responsemessage) :: IO (Either SomeException ())
@@ -220,9 +225,9 @@ handleRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
 handleRequest rm = do
    handle <- case rqApiKey rm of
     0  -> handleProduceRequest (rqRequest rm)
-    1  -> handleFetchRequest (rqRequest rm) 
+    1  -> handleFetchRequest (rqRequest rm)
     --2  -> Right $ putStrLn "OffsetRequest"
-    3  -> handleMetadataRequest (rqRequest rm) 
+    3  -> handleMetadataRequest (rqRequest rm)
     --8  -> Right $ putStrLn "OffsetCommitRequest"
     --9  -> Right $ putStrLn "OffsetFetchRequest"
     --10 -> Right $ putStrLn "ConsumerMetadataRequest"
@@ -234,12 +239,12 @@ handleRequest rm = do
 -----------------
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
-  --TODO: 
+  --TODO:
   mapM appendLog (logData req)
 
---  w <- tryIOError( mapM appendLog [ 
+--  w <- tryIOError( mapM appendLog [
 --                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
---                    | x <- rqPrTopics req, y <- partitions x 
+--                    | x <- rqPrTopics req, y <- partitions x
 --                          ]
 --          )
 --  case w of
@@ -248,21 +253,21 @@ handleProduceRequest req = do
 --
   return $ Right C.empty
 
-packProduceResponse :: ResponseMessage 
-packProduceResponse = 
-  let error = RsPrPayload 0 0 0 
+packProduceResponse :: ResponseMessage
+packProduceResponse =
+  let error = RsPrPayload 0 0 0
   in
   let response = ProduceResponse
-        (RsTopic 
-          (fromIntegral $ BL.length $ C.pack "topicHardCoded") 
-          (BC.pack "topicHardCoded") 
+        (RsTopic
+          (fromIntegral $ BL.length $ C.pack "topicHardCoded")
+          (BC.pack "topicHardCoded")
           (fromIntegral $ length [error])
           [error]
         )
         in
   let responseMessage = ResponseMessage 0 1 [response]
   in
-  responseMessage 
+  responseMessage
 
 -----------------
 -- Handle FetchRequest
@@ -290,7 +295,7 @@ packLogToFtRs t = do
 handleFetchRequest :: Request -> IO (Either HandleError BL.ByteString)
 handleFetchRequest req = do
   w <- tryIOError(liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req))
-  case w of 
+  case w of
     Left e -> return $ Left $ FtReadLogError 0 $ show e
     Right rsms -> return $ Right $ buildFtRsMessage rsms
 
@@ -299,19 +304,19 @@ handleFetchRequest req = do
 -- Handle MetadataRequest
 -----------------
 packMdRsPayloadTopic :: String -> IO RsPayload
-packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (BC.pack t) 0 [] --TODO: Partition Metadata 
+packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (BC.pack t) 0 [] --TODO: Partition Metadata
 
 packMdRs :: IO Response
-packMdRs = do 
+packMdRs = do
   ts <- getTopicNames
-  tss <- mapM packMdRsPayloadTopic ts 
-  return $ MetadataResponse 
+  tss <- mapM packMdRsPayloadTopic ts
+  return $ MetadataResponse
             1
             ([RsMdPayloadBroker 0 (fromIntegral $ BL.length $ C.pack "localhost") (BC.pack "localhost") 4343]) --single broker solution
-            (fromIntegral $ length tss) 
-            tss 
+            (fromIntegral $ length tss)
+            tss
 
 handleMetadataRequest :: Request -> IO (Either HandleError BL.ByteString)
-handleMetadataRequest req = do 
-  res <- packMdRs 
+handleMetadataRequest req = do
+  res <- packMdRs
   return $ Right $ buildMdRsMessage $ ResponseMessage 0 1 [res]
