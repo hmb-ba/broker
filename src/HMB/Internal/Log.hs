@@ -299,13 +299,20 @@ appendLog (t, p, ms) = do
   llo <- getLastLogOffset (t, p) bo lop
   let path = getPath (logFolder t p) (logFile bo)
   let bs = buildMessageSets $ ms --continueOffset (llo + 1) ms
-  fs <- getFileSize path 
-  -- Append Index (need to be made before log append)
-  let ro = fromIntegral(llo) - bo + 1 -- calculate relativeOffset for Index 
- --appendIndex (t, p) bo (ro, fs) -- Type problem 
   BL.appendFile path bs
+  -- Add index entry if needed
+  fs <- getFileSize path
+  case withinIndexInterval fs of
+    False -> return ()
+    True  -> do
+      let ro = fromIntegral(llo) - bo + 1 -- calculate relativeOffset for Index
+      let physical = fs - ((toInteger . BL.length) bs) -- filesize minus the length of last log entry
+      appendIndex (t, p) bo (fromIntegral ro, fromIntegral fs)
 
-appendIndex :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO()
+withinIndexInterval :: Integer -> Bool
+withinIndexInterval fs = 0 == (fs `mod` 4096)
+
+appendIndex :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO ()
 appendIndex (t, p) bo op = do 
   let path = getPath (logFolder t p) (indexFile bo) 
   let bs = buildOffsetPosition op
