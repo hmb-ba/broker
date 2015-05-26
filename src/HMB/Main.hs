@@ -33,6 +33,16 @@ main = do
   putStrLn "***API Worker Thread started"
 
   forever $ threadDelay 100000000  --TODO: Managed Threads and wait for all Threads to be finished
+  -- FIXME (meiersi): yes please ;-) you can use 'withAsync' from the 'async'
+  -- package. It is not perfect, as explained in this lenghty thread
+  --
+  --   http://www.reddit.com/r/haskell/comments/36tjca/neil_mitchells_haskell_blog_handling_controlc_in/
+  --
+  -- but it should get you to a reasonable place.
+  -- Ideally, you expose your server as a service as described in the service
+  -- pattern and start it using a 'withHandle :: (Handle -> IO a) -> IO a'
+  -- function that guarantees proper resource cleanup on exit of the inner
+  -- function.
 
   putStrLn "exit"
 

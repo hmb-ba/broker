@@ -1,3 +1,4 @@
+-- FIXME (meiersi): more comment would be helpful :-)
 module HMB.Internal.Log
 (-- writeLog
  readLog
@@ -228,6 +229,8 @@ getLastOffsetPosition (t, p) bo = do
 
 getFileSize :: String -> IO Integer
 getFileSize path = do
+    -- FIXME (meiersi): make this excepiton safe using 'withFile'
+    -- <http://hackage.haskell.org/package/base-4.8.0.0/docs/System-IO.html#v:withFile>
     hdl <- openFile path ReadMode 
     size <- hFileSize hdl 
     hClose hdl 
@@ -248,6 +251,10 @@ getLastLogOffset (t, p) bo (rel, phys) = do
   fs <- getFileSize path
   --print $ "physical start: " ++ (show $ fromIntegral phys)
   --print $ "filesize: " ++ show fs
+
+  -- FIXME (meiersi): this will leak resources! I suggest to read up on
+  -- 'ResourceT' to handle that properly
+  -- <https://hackage.haskell.org/package/resourcet>.
   bs <- mmapFileByteStringLazy path $ Just (fromIntegral phys, (fromIntegral (fs) - fromIntegral phys))
   --Nothing -- $ Just (fromIntegral phys, fromIntegral eof)
   --print bs

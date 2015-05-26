@@ -2,6 +2,9 @@ module Main (
   main
 ) where
 
+-- FIXME (meiersi): consider to sort alphabetically and introduce an empty
+-- line whenever the prefix before the first '.' changes. It is a simple rule
+-- and improves readability of the dependency graph.
 import Kafka.Client
 import Network.Socket
 import System.IO
@@ -31,6 +34,14 @@ main = do
   -------------------------
   -- Send / Receive Loop
   -------------------------
+  -- FIXME (meiersi): consider using a randomly generated string to avoid
+  -- artifacts due to accidental regularity.
+  -- FIXME (meiersi): I'd also recommend making the length of this string a
+  -- command-line parameter to simplify tests.
+  -- FIXME (meiersi): also consider whether you can create criterion
+  -- microbenchmarks for all relevant parts of the message processing code
+  -- path. This will help you pinpoint performance problems and direct your
+  -- optimization efforts.
   let payload = C.pack "bytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytes"
   let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [ payload | x <- [1..10]])
   print req
