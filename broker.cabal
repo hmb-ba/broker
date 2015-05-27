@@ -26,7 +26,7 @@ library
     kafka-protocol -any,
     mtl -any,
     mmap -any,
-    unix -any
+    async -any
 executable broker
   main-is:             HMB/Main.hs
   -- other-modules:       
@@ -36,7 +36,7 @@ executable broker
     binary >=0.6 && <0.8,
     bytestring >=0.10 && <0.11,
     network >= 2.6,
-    async >= 2.0,
+    async -any,
     cond >= 0.4,
     directory >= 1.2,
     digest >= 0.0.1.2,
