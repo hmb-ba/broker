@@ -229,11 +229,7 @@ getLastOffsetPosition (t, p) bo = do
 
 getFileSize :: String -> IO Integer
 getFileSize path = do
-    -- FIXME (meiersi): make this excepiton safe using 'withFile'
-    -- <http://hackage.haskell.org/package/base-4.8.0.0/docs/System-IO.html#v:withFile>
-    hdl <- openFile path ReadMode 
-    size <- hFileSize hdl 
-    hClose hdl 
+    size <- withFile path ReadMode (\hdl -> hFileSize hdl)
     return size
 
 lastOffset :: Log -> Offset
