@@ -306,8 +306,9 @@ appendLog (t, p, ms) = do
     False -> return ()
     True  -> do
       let ro = fromIntegral(llo) - bo + 1 -- calculate relativeOffset for Index
-      let physical = fs - ((toInteger . BL.length) bs) -- filesize minus the length of last log entry
-      appendIndex (t, p) bo (fromIntegral ro, fromIntegral fs)
+      let msSize = ((toInteger . BL.length) bs)
+      let physical = fs - msSize -- filesize minus the length of last log entry
+      appendIndex (t, p) bo (fromIntegral ro, fromIntegral physical)
 
 withinIndexInterval :: Integer -> Bool
 withinIndexInterval fs = 0 == (fs `mod` 4096)
