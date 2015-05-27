@@ -237,7 +237,7 @@ getFileSize path = do
     return size
 
 lastOffset :: Log -> Offset
-lastOffset [] = 0
+lastOffset [] = -1
 lastOffset xs = (offset . last) xs
 
 getLastLogOffset :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Offset
@@ -292,26 +292,36 @@ partitionSet tn p = (tn, pn, ms)
 logData :: Request -> [(TopicStr, Int, [MessageSet])]
 logData r = concat $ map (setsOfPartitions . partitionsOfTopic) (rqPrTopics r)
 
+nextOffset :: Offset -> Offset
+nextOffset (-1) = 0
+nextOffset o = o + 1
+
 appendLog :: (TopicStr, Int, [MessageSet]) -> IO()
 appendLog (t, p, ms) = do
   bo  <- getLastBaseOffset (t, p)
   lop <- getLastOffsetPosition (t, p) bo
   llo <- getLastLogOffset (t, p) bo lop
   let path = getPath (logFolder t p) (logFile bo)
-  let bs = buildMessageSets $ ms --continueOffset (llo + 1) ms
-  BL.appendFile path bs
+
   -- Add index entry if needed
   fs <- getFileSize path
   case withinIndexInterval fs of
     False -> return ()
     True  -> do
-      let ro = fromIntegral(llo) - bo + 1 -- calculate relativeOffset for Index
-      let msSize = ((toInteger . BL.length) bs)
-      let physical = fs - msSize -- filesize minus the length of last log entry
-      appendIndex (t, p) bo (fromIntegral ro, fromIntegral physical)
+      let ro = fromIntegral(nextOffset llo) - bo -- calculate relativeOffset for Index
+      appendIndex (t, p) bo (fromIntegral ro, fromIntegral fs)
+
+  -- Append log entry
+  print "untouched:"
+  print ms
+  print "assign:"
+  print $ continueOffset (llo) ms
+  print "write..."
+  let bs = buildMessageSets $ continueOffset (nextOffset llo) ms
+  BL.appendFile path bs
 
 withinIndexInterval :: Integer -> Bool
-withinIndexInterval fs = 0 == (fs `mod` 4096)
+withinIndexInterval fs = 0 == (fs `mod` 2)
 
 appendIndex :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO ()
 appendIndex (t, p) bo op = do 
