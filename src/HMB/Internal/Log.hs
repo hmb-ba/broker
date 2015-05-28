@@ -22,6 +22,8 @@ import Control.Monad
 import Kafka.Protocol
 
 import Data.Binary.Get
+import Data.Binary.Put 
+
 import Data.Word
 import Control.Applicative
 
@@ -316,7 +318,7 @@ appendLog (t, p, ms) = do
   print "assign:"
   print $ continueOffset (llo) ms
   print "write..."
-  let bs = buildMessageSets $ continueOffset (nextOffset llo) ms
+  let bs = runPut $ buildMessageSets $ continueOffset (nextOffset llo) ms
   BL.appendFile path bs
 
 withinIndexInterval :: Integer -> Bool
@@ -326,11 +328,11 @@ withinIndexInterval fs = 0 == (fs `mod` 2)
 appendIndex :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO ()
 appendIndex (t, p) bo op = do 
   let path = getPath (logFolder t p) (indexFile bo) 
-  let bs = buildOffsetPosition op
+  let bs = runPut $ buildOffsetPosition op
   BL.appendFile path bs 
 
-buildOffsetPosition :: OffsetPosition -> BL.ByteString
-buildOffsetPosition (o, p) = runPut $ do 
+buildOffsetPosition :: OffsetPosition -> Put
+buildOffsetPosition (o, p) = do 
     putWord32be o
     putWord32be p
 

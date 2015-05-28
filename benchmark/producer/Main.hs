@@ -29,7 +29,8 @@ main = do
   sock <- socket AF_INET Stream defaultProtocol 
   setSocketOption sock ReuseAddr 1
   --let ip = toHostAddress (read "127.0.0.1" :: IPv4)
-  let ip = toHostAddress (read "152.96.195.205" :: IPv4)
+  --let ip = toHostAddress (read "152.96.195.205" :: IPv4)
+  let ip = toHostAddress (read "152.96.195.4" :: IPv4)
   connect sock (SockAddrInet 4343 ip)
 
   -------------------------
@@ -44,12 +45,12 @@ main = do
   -- path. This will help you pinpoint performance problems and direct your
   -- optimization efforts.
 
-  randBytes <- getEntropy 10000
-  let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [ randBytes | x <- [1..100]])
+  randBytes <- getEntropy 100
+  let req = packPrRqMessage (C.pack "client", C.pack "performance", 0,  [randBytes | x <- [1..1000]])
   --let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [randBytes])
   --print req
   --replicateM_ 1000 (sendRequest sock $ req)
-  replicateM_ 1000 (sendRequest sock $ req)
+  replicateM_ 10000 (sendRequest sock $ req)
   putStrLn "done produce"
   return ()
     

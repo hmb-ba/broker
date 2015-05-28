@@ -23,8 +23,12 @@ import System.Environment
 import Control.Concurrent
 import Control.Concurrent.Chan
 import Control.Monad
+
 import Kafka.Protocol
+
 import Data.Binary.Get
+import Data.Binary.Put 
+
 import qualified Data.ByteString.Lazy.Char8 as C
 import Control.Exception
 import Prelude hiding (catch)
@@ -280,7 +284,7 @@ packPartitionsToFtRsPayload t p = do
         0
         0
         0
-        (fromIntegral $ BL.length $ foldl (\acc ms -> BL.append acc (buildMessageSet ms)) BL.empty log)
+        (fromIntegral $ BL.length $ foldl (\acc ms -> BL.append acc (runPut $ buildMessageSet ms)) BL.empty log)
         log
 
 packLogToFtRs :: RqTopic -> IO Response
@@ -297,7 +301,7 @@ handleFetchRequest req = do
   w <- tryIOError(liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req))
   case w of
     Left e -> return $ Left $ FtReadLogError 0 $ show e
-    Right rsms -> return $ Right $ buildFtRsMessage rsms
+    Right rsms -> return $ Right $ runPut $ buildFtRsMessage rsms
 
 
 -----------------
@@ -319,4 +323,4 @@ packMdRs = do
 handleMetadataRequest :: Request -> IO (Either HandleError BL.ByteString)
 handleMetadataRequest req = do
   res <- packMdRs
-  return $ Right $ buildMdRsMessage $ ResponseMessage 0 1 [res]
+  return $ Right $ runPut $ buildMdRsMessage $ ResponseMessage 0 1 [res]
