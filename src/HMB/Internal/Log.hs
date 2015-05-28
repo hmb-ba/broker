@@ -343,6 +343,7 @@ readLog tp o = do
   bos <- getBaseOffsets tp 
   let bo = getBaseOffsetFor bos o
   op <- indexLookup tp bo o 
+  print op
   log <- getLogFrom tp bo op
   return $ filterMessageSetsFor log o 
 
@@ -356,17 +357,21 @@ indexLookup (t, p) bo to = do
     Left (bs, byo, e)   -> do
         print e
         return $ (0,0) --todo: error handling
-    Right (bs, byo, ops) -> return $ getOffsetPositionFor ops bo to 
+    Right (bs, byo, ops) -> do 
+      print ops 
+      return $ getOffsetPositionFor ops bo to 
 
 getOffsetPositionFor :: [OffsetPosition] -> BaseOffset -> Offset -> OffsetPosition 
--- get greatest offsetPosition from list that is les than or equal target offset 
+-- get greatest offsetPosition from list that is less than or equal target offset 
 getOffsetPositionFor [] bo to = (0, 0)
 getOffsetPositionFor [x] bo to = x
-getOffsetPositionFor (x:xs) bo to = 
-                      if ((fromIntegral $ fst $ x) + bo) <= fromIntegral to 
-                      && fromIntegral to < ((fromIntegral $ fst $ head $ xs) + bo) 
-                        then x 
-                        else getOffsetPositionFor xs bo to 
+getOffsetPositionFor (x:xs) bo to
+       | targetOffset <= absoluteIndexOffset = (0,0) 
+       | absoluteIndexOffset <= targetOffset && targetOffset < nextAbsoluteIndexOffset = x 
+       | otherwise = getOffsetPositionFor xs bo to 
+  where  nextAbsoluteIndexOffset = ((fromIntegral $ fst $ head $ xs) + bo)
+         absoluteIndexOffset = (fromIntegral $ fst $ x) + bo
+         targetOffset = fromIntegral $ to 
 
 getBaseOffsetFor :: [BaseOffset] -> Offset -> BaseOffset
 -- get greatest baseOffset from list that is less than or equal target offset 
@@ -380,9 +385,10 @@ getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head 
 
 getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO [MessageSet]
 -- ParseLog starting from given physical Position. 
-getLogFrom (t, p) bo (ro, phy) = do 
+getLogFrom (t, p) bo (_, phy) = do 
   let path = getPath (logFolder t p) (logFile bo)
-  fs <- getFileSize path 
+  fs <- getFileSize path
+  --print phy
   bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
   return $ runGet decodeLog bs 
 
