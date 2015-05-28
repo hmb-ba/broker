@@ -14,6 +14,7 @@ module HMB.Internal.Log
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy.Char8 as BCL
 
 import Data.Binary.Put
 import System.Directory
@@ -226,17 +227,27 @@ getLastOffsetPosition (t, p) bo = do
         return $ (0,0) --todo: error handling
     Right (bs, bo, ops) -> return $ lastIndex ops
 
+getLastOffsetPosition' :: BL.ByteString -> OffsetPosition
+getLastOffsetPosition' bs = 
+  case decodeIndex bs of
+    Left (bs, bo, e) -> (0,0)
+    Right (bs, bo, ops) -> lastIndex ops
+
+
 -------------------------------------------------------
 
 
 getFileSize :: String -> IO Integer
 getFileSize path = do
-    size <- withFile path ReadMode (\hdl -> hFileSize hdl)
-    return size
+  size <- withFile path ReadMode (\hdl -> hFileSize hdl)
+--  hdl <- openFile path ReadMode
+--  size <- hFileSize hdl
+--  print size
+  return size
 
-lastOffset :: Log -> Offset
-lastOffset [] = -1
-lastOffset xs = (offset . last) xs
+lastOffset :: Log -> Maybe Offset
+lastOffset [] = Nothing
+lastOffset xs = Just $ (offset . last) xs
 
 getLastLogOffset :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Offset
 -- find last Offset in the log, start search from given offsetposition 
@@ -253,10 +264,17 @@ getLastLogOffset (t, p) bo (rel, phys) = do
   -- FIXME (meiersi): this will leak resources! I suggest to read up on
   -- 'ResourceT' to handle that properly
   -- <https://hackage.haskell.org/package/resourcet>.
-  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phys, (fromIntegral (fs) - fromIntegral phys))
-  --Nothing -- $ Just (fromIntegral phys, fromIntegral eof)
-  --print bs
-  return $ lastOffset $ runGet getLog bs
+--  bs <- mmapFileByteStringLazy path $ Nothing -- Just (fromIntegral phys, (fromIntegral (fs) - fromIntegral phys))
+  
+  hdl <- openFile path ReadMode
+  bs <- BL.hGetContents hdl
+
+  case lastOffset $ runGet getLog bs of
+    Nothing -> return 0
+    Just lo -> return lo
+
+getLastLogOffset' :: BL.ByteString -> Maybe Offset
+getLastLogOffset' bs = lastOffset $ runGet getLog bs
 
 -------------------------------------------------------
 
@@ -291,43 +309,68 @@ logData :: Request -> [(TopicStr, Int, [MessageSet])]
 logData r = concat $ map (setsOfPartitions . partitionsOfTopic) (rqPrTopics r)
 
 nextOffset :: Offset -> Offset
-nextOffset (-1) = 0
 nextOffset o = o + 1
 
 appendLog :: (TopicStr, Int, [MessageSet]) -> IO()
 appendLog (t, p, ms) = do
+  -- (1)
   bo  <- getLastBaseOffset (t, p)
-  lop <- getLastOffsetPosition (t, p) bo
-  llo <- getLastLogOffset (t, p) bo lop
-  let path = getPath (logFolder t p) (logFile bo)
+  let logPath = getPath (logFolder t p) (logFile bo)
+  let indexPath = getPath (logFolder t p) (indexFile bo)
 
-  print $ "last index: " ++ (show lop)
-  print $ "last log: " ++ (show llo)
+  someindexreturn <- withFile indexPath ReadWriteMode $ \ihdl -> do
 
-  -- Add index entry if needed
-  fs <- getFileSize path
-  case withinIndexInterval fs of
-    False -> return ()
-    True  -> do
-      let ro = fromIntegral(nextOffset llo) - bo -- calculate relativeOffset for Index
-      appendIndex (t, p) bo (fromIntegral ro, fromIntegral fs)
+    -- (2)
+      ibs <- BL.hGetContents ihdl
+      let lop = getLastOffsetPosition' ibs
+      let phys = fromIntegral $ snd lop
+      --print $ "last index: " ++ (show lop)
 
-  -- Append log entry
-  print "untouched:"
-  print ms
-  print "assign:"
-  print $ continueOffset (llo) ms
-  print "write..."
-  let bs = runPut $ buildMessageSets $ continueOffset (nextOffset llo) ms
-  BL.appendFile path bs
+
+      somelogreturn <- withFile logPath ReadWriteMode $ \lhdl -> do
+            fs <- hFileSize lhdl
+            --print $ "filesize log:" ++ (show fs)
+            --bs <- mmapFileByteStringLazy path $ Just (fromIntegral phys, (fromIntegral (fs) - fromIntegral phys))
+
+            lbs <- case fs of
+              0 -> return BL.empty
+              _ -> do
+                  --hSeek lhdl AbsoluteSeek phys
+                  lbs <- BL.hGet lhdl (fromInteger fs)
+                  return lbs
+            --print $ "log bytes: " ++ (show lbs)
+
+            -- (3)
+            case getLastLogOffset' lbs of
+                Nothing -> do
+                      --print "last log offset: empty"
+                      let bs = runPut $ buildMessageSets $ continueOffset (nextOffset 0) ms
+                      BL.hPut lhdl bs
+                      return (fs, 0)
+                Just llo -> do
+                      --print $ "last log offset: " ++ (show llo)
+                      let bs = runPut $ buildMessageSets $ continueOffset (nextOffset llo) ms
+                      hSeek lhdl SeekFromEnd 0
+                      BL.hPut lhdl bs
+                      return (fs, llo)
+
+      let lfs = fst somelogreturn
+      let llo = snd somelogreturn
+      case withinIndexInterval lfs of
+          False -> return ()
+          True  -> do
+            let ro = fromIntegral(nextOffset llo) - bo -- calculate relativeOffset for Index
+            let op = (fromIntegral ro, fromIntegral lfs)
+            BL.hPut ihdl $ runPut $ buildOffsetPosition op
+      
+  return ()
 
 withinIndexInterval :: Integer -> Bool
 withinIndexInterval 0 = False
-withinIndexInterval fs = 0 == (fs `mod` 2)
+withinIndexInterval fs = 0 == (fs `mod` 100)
 
-appendIndex :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO ()
-appendIndex (t, p) bo op = do 
-  let path = getPath (logFolder t p) (indexFile bo) 
+appendIndex :: String -> OffsetPosition -> IO ()
+appendIndex path op = do 
   let bs = runPut $ buildOffsetPosition op
   BL.appendFile path bs 
 
