@@ -299,6 +299,9 @@ appendLog (t, p, ms) = do
   llo <- getLastLogOffset (t, p) bo lop
   let path = getPath (logFolder t p) (logFile bo)
 
+  print $ "last index: " ++ (show lop)
+  print $ "last log: " ++ (show llo)
+
   -- Add index entry if needed
   fs <- getFileSize path
   case withinIndexInterval fs of
@@ -317,6 +320,7 @@ appendLog (t, p, ms) = do
   BL.appendFile path bs
 
 withinIndexInterval :: Integer -> Bool
+withinIndexInterval 0 = False
 withinIndexInterval fs = 0 == (fs `mod` 2)
 
 appendIndex :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO ()
