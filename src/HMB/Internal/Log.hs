@@ -345,8 +345,7 @@ readLog tp o = do
   op <- indexLookup tp bo o 
   print op
   log <- getLogFrom tp bo op
-  --return $ filterMessageSetsFor log o 
-  return $ log 
+  return $ filterMessageSetsFor log o 
 
 indexLookup :: (TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition 
 ---locate the offset/location pair for the greatest offset less than or equal
@@ -366,11 +365,13 @@ getOffsetPositionFor :: [OffsetPosition] -> BaseOffset -> Offset -> OffsetPositi
 -- get greatest offsetPosition from list that is less than or equal target offset 
 getOffsetPositionFor [] bo to = (0, 0)
 getOffsetPositionFor [x] bo to = x
-getOffsetPositionFor (x:xs) bo to = 
-                      if ((fromIntegral $ fst $ x) + bo) <= fromIntegral to 
-                      && fromIntegral to < ((fromIntegral $ fst $ head $ xs) + bo) 
-                        then x 
-                        else getOffsetPositionFor xs bo to 
+getOffsetPositionFor (x:xs) bo to
+       | targetOffset <= absoluteIndexOffset = (0,0) 
+       | absoluteIndexOffset <= targetOffset && targetOffset < nextAbsoluteIndexOffset = x 
+       | otherwise = getOffsetPositionFor xs bo to 
+  where  nextAbsoluteIndexOffset = ((fromIntegral $ fst $ head $ xs) + bo)
+         absoluteIndexOffset = (fromIntegral $ fst $ x) + bo
+         targetOffset = fromIntegral $ to 
 
 getBaseOffsetFor :: [BaseOffset] -> Offset -> BaseOffset
 -- get greatest baseOffset from list that is less than or equal target offset 
