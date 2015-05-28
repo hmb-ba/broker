@@ -339,8 +339,10 @@ readLog tp o = do
   bos <- getBaseOffsets tp 
   let bo = getBaseOffsetFor bos o
   op <- indexLookup tp bo o 
+  print op
   log <- getLogFrom tp bo op
-  return $ filterMessageSetsFor log o 
+  --return $ filterMessageSetsFor log o 
+  return $ log 
 
 indexLookup :: (TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition 
 ---locate the offset/location pair for the greatest offset less than or equal
@@ -352,10 +354,12 @@ indexLookup (t, p) bo to = do
     Left (bs, byo, e)   -> do
         print e
         return $ (0,0) --todo: error handling
-    Right (bs, byo, ops) -> return $ getOffsetPositionFor ops bo to 
+    Right (bs, byo, ops) -> do 
+      print ops 
+      return $ getOffsetPositionFor ops bo to 
 
 getOffsetPositionFor :: [OffsetPosition] -> BaseOffset -> Offset -> OffsetPosition 
--- get greatest offsetPosition from list that is les than or equal target offset 
+-- get greatest offsetPosition from list that is less than or equal target offset 
 getOffsetPositionFor [] bo to = (0, 0)
 getOffsetPositionFor [x] bo to = x
 getOffsetPositionFor (x:xs) bo to = 
@@ -376,9 +380,10 @@ getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head 
 
 getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO [MessageSet]
 -- ParseLog starting from given physical Position. 
-getLogFrom (t, p) bo (ro, phy) = do 
+getLogFrom (t, p) bo (_, phy) = do 
   let path = getPath (logFolder t p) (logFile bo)
-  fs <- getFileSize path 
+  fs <- getFileSize path
+  --print phy
   bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
   return $ runGet decodeLog bs 
 
