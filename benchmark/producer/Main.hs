@@ -16,6 +16,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C
 import Control.Concurrent
 import qualified Network.Socket.ByteString.Lazy as SBL
+import System.Entropy
 
 startTest :: Int -> (b) -> b
 startTest 1 f = f
@@ -42,12 +43,14 @@ main = do
   -- microbenchmarks for all relevant parts of the message processing code
   -- path. This will help you pinpoint performance problems and direct your
   -- optimization efforts.
-  let payload = C.pack "bytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytesbytes"
-  let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [ payload | x <- [1..10]])
-  print req
-  replicateM_ 1000000 (sendRequest sock $ req)
+
+  randBytes <- getEntropy 10000
+  let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [ randBytes | x <- [1..100]])
+  --let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [randBytes])
+  --print req
+  --replicateM_ 1000 (sendRequest sock $ req)
+  replicateM_ 1000 (sendRequest sock $ req)
   putStrLn "done produce"
-  --threadDelay 10000000
   return ()
     
     --------------------
