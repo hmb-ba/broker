@@ -458,11 +458,40 @@ appendLogSafe (t, p, ms) = do
   --bo <- getLastBaseOffset (t, p) --IO()
   let logPath = getPath (logFolder t p) (logFile 0)
   let indexPath = getPath (logFolder t p) (indexFile 0)
-  (key, resource) <- R.allocate (allocateFile logPath) free
+  (key, iresource) <- R.allocate (allocateFile indexPath) free
+  -- Register some Action with resources 
+  let lop = getLastOffsetPosition' iresource
+  let phys = fromIntegral $ snd lop
 
+
+  (ikey, lresource) <- R.allocate (allocateFile logPath) free
   -- Register some Action with resources 
 
+  let fs = BL.length lresource
+  let llo = case getLastLogOffset' lresource of
+              Nothing -> do
+                    --print "last log offset: empty"
+                    let bs = runPut $ buildMessageSets $ continueOffset (nextOffset 0) ms
+                    --BL.hPut lhdl bs
+                    return (fs, 0)
+              Just llo -> do
+                    --print $ "last log offset: " ++ (show llo)
+                    let bs = runPut $ buildMessageSets $ continueOffset (nextOffset llo) ms
+                    --BL.hPut lhdl bs
+                    return (fs, llo)
+
+
+  R.release ikey
+
+  case withinIndexInterval fs of
+      False -> return ()
+      True  -> do
+        let ro = fromIntegral(nextOffset llo) - bo -- calculate relativeOffset for Index
+        let op = (fromIntegral ro, fromIntegral fs)
+        --BL.hPut ihdl $ runPut $ buildOffsetPosition op
+
   R.release key
+
 
 allocateFile :: String -> IO BL.ByteString
 allocateFile path = mmapFileByteStringLazy path Nothing
