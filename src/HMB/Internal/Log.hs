@@ -8,6 +8,7 @@ module HMB.Internal.Log
 , getLastLogOffset
 , continueOffset
 , appendLog
+, appendLogSafe
 , logData
 ) where
 
@@ -37,6 +38,7 @@ import Data.List
 import Text.Printf
 
 import qualified Control.Monad.Trans.Resource as R
+
 ----------------------------------------------------------
 -- Log Writer (old)
 ----------------------------------------------------------
@@ -453,9 +455,13 @@ filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms
 ---------------
 -- ResourceT
 -- ------------
-appendLogSafe :: (TopicStr, Int, [MessageSet]) -> R.ResourceT IO ()
-appendLogSafe (t, p, ms) = do 
-  --bo <- getLastBaseOffset (t, p) --IO()
+appendLogSafe :: (TopicStr, Int, [MessageSet]) -> IO ()
+appendLogSafe (t, p, ms) = do
+  bo <- getLastBaseOffset (t, p)
+  R.runResourceT $ runAppend bo (t, p, ms)
+
+runAppend :: BaseOffset -> (TopicStr, Int, [MessageSet]) -> R.ResourceT IO ()
+runAppend bo (t, p, ms) = do
   let logPath = getPath (logFolder t p) (logFile 0)
   let indexPath = getPath (logFolder t p) (indexFile 0)
   (key, iresource) <- R.allocate (allocateFile indexPath) free
@@ -467,19 +473,14 @@ appendLogSafe (t, p, ms) = do
   (ikey, lresource) <- R.allocate (allocateFile logPath) free
   -- Register some Action with resources 
 
-  let fs = BL.length lresource
+  let fs = toInteger $ BL.length lresource
   let llo = case getLastLogOffset' lresource of
-              Nothing -> do
-                    --print "last log offset: empty"
-                    let bs = runPut $ buildMessageSets $ continueOffset (nextOffset 0) ms
-                    --BL.hPut lhdl bs
-                    return (fs, 0)
-              Just llo -> do
-                    --print $ "last log offset: " ++ (show llo)
-                    let bs = runPut $ buildMessageSets $ continueOffset (nextOffset llo) ms
-                    --BL.hPut lhdl bs
-                    return (fs, llo)
+              Nothing -> 0
+              Just llo -> llo
 
+  --print $ "last log offset: " ++ (show llo)
+  let bs = runPut $ buildMessageSets $ continueOffset (nextOffset llo) ms
+  R.register $ BL.appendFile logPath bs
 
   R.release ikey
 
@@ -488,13 +489,13 @@ appendLogSafe (t, p, ms) = do
       True  -> do
         let ro = fromIntegral(nextOffset llo) - bo -- calculate relativeOffset for Index
         let op = (fromIntegral ro, fromIntegral fs)
-        --BL.hPut ihdl $ runPut $ buildOffsetPosition op
+        k <- R.register $ BL.appendFile indexPath (runPut $ buildOffsetPosition op)
+        return ()
 
   R.release key
 
-
 allocateFile :: String -> IO BL.ByteString
-allocateFile path = mmapFileByteStringLazy path Nothing
+allocateFile path = BL.readFile path -- mmapFileByteStringLazy path Nothing
 
 free :: BL.ByteString -> IO() 
 free bs = return () --TODO: free Space

@@ -244,17 +244,17 @@ handleRequest rm = do
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
   --TODO:
---  mapM appendLog (logData req)
+  mapM appendLogSafe (logData req)
 
-  w <- tryIOError( mapM appendLog [
-                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
-                    | x <- rqPrTopics req, y <- partitions x
-                          ]
-          )
-  case w of
-      Left e -> return $ Left $ PrWriteLogError 0 "todo"
-      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
-
+--  w <- tryIOError( mapM appendLog [
+--                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
+--                    | x <- rqPrTopics req, y <- partitions x
+--                          ]
+--          )
+--  case w of
+--      Left e -> return $ Left $ PrWriteLogError 0 "todo"
+--      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
+--
   return $ Right C.empty
 
 packProduceResponse :: ResponseMessage
