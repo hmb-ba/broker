@@ -26,7 +26,8 @@ library
     kafka-protocol -any,
     mtl -any,
     mmap -any,
-    async -any
+    async -any,
+    resourcet -any
 executable broker
   main-is:             HMB/Main.hs
   -- other-modules:       
@@ -43,7 +44,8 @@ executable broker
     kafka-protocol -any,
     mtl -any,
     mmap -any,
-    cereal -any
+    cereal -any,
+    resourcet -any
   hs-source-dirs:      src
   default-language:    Haskell2010
 

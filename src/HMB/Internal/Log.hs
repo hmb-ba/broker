@@ -36,6 +36,7 @@ import Data.List
 --import qualified Data.Text as Text -- for isInfixOf
 import Text.Printf
 
+import qualified Control.Monad.Trans.Resource as R
 ----------------------------------------------------------
 -- Log Writer (old)
 ----------------------------------------------------------
@@ -312,7 +313,7 @@ nextOffset :: Offset -> Offset
 nextOffset o = o + 1
 
 appendLog :: (TopicStr, Int, [MessageSet]) -> IO()
-appendLog (t, p, ms) = do
+appendLog (t, p, ms) = do 
   -- (1)
   bo  <- getLastBaseOffset (t, p)
   let logPath = getPath (logFolder t p) (logFile bo)
@@ -449,6 +450,25 @@ decodeLog = do
 filterMessageSetsFor :: [MessageSet] -> Offset -> [MessageSet]
 filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms 
 
+---------------
+-- ResourceT
+-- ------------
+appendLogSafe :: (TopicStr, Int, [MessageSet]) -> R.ResourceT IO ()
+appendLogSafe (t, p, ms) = do 
+  --bo <- getLastBaseOffset (t, p) --IO()
+  let logPath = getPath (logFolder t p) (logFile 0)
+  let indexPath = getPath (logFolder t p) (indexFile 0)
+  (key, resource) <- R.allocate (allocateFile logPath) free
+
+  -- Register some Action with resources 
+
+  R.release key
+
+allocateFile :: String -> IO BL.ByteString
+allocateFile path = mmapFileByteStringLazy path Nothing
+
+free :: BL.ByteString -> IO() 
+free bs = return () --TODO: free Space
 
 --decodeLogFrom :: Offset -> Get MessageSet
 --decodeLogFrom to = do
