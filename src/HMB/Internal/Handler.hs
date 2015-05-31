@@ -27,7 +27,7 @@ import Control.Monad
 import Kafka.Protocol
 
 import Data.Binary.Get
-import Data.Binary.Put 
+import Data.Binary.Put
 
 import qualified Data.ByteString.Lazy.Char8 as C
 import Control.Exception
@@ -243,8 +243,7 @@ handleRequest rm = do
 -----------------
 handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
 handleProduceRequest req = do
-  --TODO:
-  mapM appendLogSafe (logData req)
+  mapM appendLog (logData req)
 
 --  w <- tryIOError( mapM appendLog [
 --                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
