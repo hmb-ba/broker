@@ -36,7 +36,7 @@ import Control.Monad.Error
 import System.IO.Error
 import Control.Applicative
 
-import HMB.Internal.Log
+import qualified HMB.Internal.Log as Log
 
 import Data.Typeable
 
@@ -192,16 +192,20 @@ sendResponse (socket, addr) responsemessage = try(SBL.sendAll socket $ responsem
 ------------------------------
 runApiHandler :: RequestChan -> ResponseChan -> IO()
 runApiHandler rqChan rsChan = do
+  s <- Log.new
+  handlerLoop s rqChan rsChan
+
+handlerLoop :: Log.LogState -> RequestChan -> ResponseChan -> IO ()
+handlerLoop s rqChan rsChan = do
   (conn, req) <- readChan rqChan
-  --let lazyReq = BL.fromChunks [req]
   case readRequest req of
     Left (bs, bo, e) -> handleHandlerError conn $ ParseRequestError e
     Right (bs, bo, rm) -> do
-      res <- handleRequest rm
+      res <- handleRequest rm s
       case res  of
         Left e -> handleHandlerError conn e
         Right bs -> writeToResChan conn rsChan (bs)
-  runApiHandler rqChan rsChan
+  handlerLoop s rqChan rsChan
 
 readRequest :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, RequestMessage)
 readRequest a = runGetOrFail requestMessageParser a
@@ -225,10 +229,10 @@ handleHandlerError (s, a) e = do
   putStrLn $ "***Host " ++ (show a) ++ "disconnected ***"
 
 
-handleRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
-handleRequest rm = do
+handleRequest :: RequestMessage -> Log.LogState -> IO (Either HandleError BL.ByteString)
+handleRequest rm s = do
    handle <- case rqApiKey rm of
-    0  -> handleProduceRequest (rqRequest rm)
+    0  -> handleProduceRequest (rqRequest rm) s
     1  -> handleFetchRequest (rqRequest rm)
     --2  -> Right $ putStrLn "OffsetRequest"
     3  -> handleMetadataRequest (rqRequest rm)
@@ -241,19 +245,19 @@ handleRequest rm = do
 -----------------
 -- Handle ProduceRequest
 -----------------
-handleProduceRequest :: Request ->  IO (Either HandleError BL.ByteString)
-handleProduceRequest req = do
-  mapM appendLog (logData req)
+handleProduceRequest :: Request -> Log.LogState -> IO (Either HandleError BL.ByteString)
+handleProduceRequest req s = do
+  --mapM Log.appendLog (Log.logData req)
 
---  w <- tryIOError( mapM appendLog [
---                    (BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
---                    | x <- rqPrTopics req, y <- partitions x
---                          ]
---          )
---  case w of
---      Left e -> return $ Left $ PrWriteLogError 0 "todo"
---      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
---
+  w <- tryIOError( mapM Log.insert [
+                    (s, BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
+                    | x <- rqPrTopics req, y <- partitions x
+                          ]
+          )
+  case w of
+      Left e -> return $ Left $ PrWriteLogError 0 "todo"
+      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
+
   return $ Right C.empty
 
 packProduceResponse :: ResponseMessage
@@ -278,7 +282,7 @@ packProduceResponse =
 
 packPartitionsToFtRsPayload :: TopicName -> Partition -> IO RsPayload
 packPartitionsToFtRsPayload t p = do
-    log <- readLog (BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
+    log <- Log.readLog (BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
     return $ RsFtPayload
         0
         0
@@ -311,7 +315,7 @@ packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (
 
 packMdRs :: IO Response
 packMdRs = do
-  ts <- getTopicNames
+  ts <- Log.getTopicNames
   tss <- mapM packMdRsPayloadTopic ts
   return $ MetadataResponse
             1

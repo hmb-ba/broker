@@ -1,7 +1,7 @@
 -- FIXME (meiersi): more comment would be helpful :-)
 module HMB.Internal.Log
-(-- writeLog
- readLog
+( new
+, readLog
 , getTopicNames
 , getLastBaseOffset
 , getLastOffsetPosition
@@ -9,31 +9,35 @@ module HMB.Internal.Log
 , continueOffset
 , appendLog
 , logData
+, HMB.Internal.Log.insert
+, LogState(..)
 ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as BCL
-
-import System.Directory
-import Control.Conditional
-import Control.Monad
-import Kafka.Protocol
-
 import Data.Binary.Get
 import Data.Binary.Put
-
+import Data.Maybe
+import qualified Data.Map.Lazy as Map
 import Data.Word
-import Control.Applicative
+import Data.List
 
+import Text.Printf
+
+import System.Directory
 import System.IO.MMap
 import System.IO
-import Data.List
-import Text.Printf
-import Data.Maybe
 
 import qualified Control.Monad.Trans.Resource as R
+import Control.Concurrent.MVar
+import Control.Conditional
+import Control.Monad
+import Control.Applicative
+
+import Kafka.Protocol
+
 
 ----------------------------------------------------------
 -- Log Writer (old)
@@ -110,7 +114,27 @@ type OffsetIndex = [OffsetPosition]
 type OffsetPosition = (RelativeOffset, FileOffset)
 type RelativeOffset = Word32
 type FileOffset = Word32
-type BaseOffset = Int --Word64
+type BaseOffset = Int
+
+type Logs = Map.Map (TopicStr, PartitionNr) [MessageSet]
+newtype LogState = LogState (MVar Logs)
+
+new :: IO LogState
+new = do
+  m <- newMVar Map.empty
+  return (LogState m)
+
+
+insert :: (LogState, TopicStr, PartitionNr, [MessageSet]) -> IO ()
+insert (LogState m, t, p, ms) = do
+  logs <- takeMVar m
+  let insertOrAppend = (fromMaybe [] (Map.lookup (t, p) logs)) ++ ms
+  putStrLn $ show insertOrAppend
+  putStrLn "\n"
+  putMVar m (Map.insert (t, p) insertOrAppend logs)
+
+
+----------------------------------------------------------
 
 
 logFolder :: TopicStr -> PartitionNr -> String
