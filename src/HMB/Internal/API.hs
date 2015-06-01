@@ -1,26 +1,49 @@
+-- |
+-- -- Module      : HMB.Internal.API
+-- -- Copyright   : (c) Marc Juchli, Lorenz Wolf 2015
+-- -- License     : BSD-style
+-- --
+-- -- Maintainer  :
+-- -- Stability   : WIP
+-- -- Portability : GHC
+-- --
+-- -- This module ..... 
+-- -- --
+-- --
+-- -- > import ...
+-- 
 module HMB.Internal.API
 ( handleRequest
 , runApiHandler
 ) where
 
-import Kafka.Protocol
 import HMB.Internal.Types
 import qualified HMB.Internal.Log as Log
+import Kafka.Protocol
 
+import Network.Socket
+import qualified Network.Socket.ByteString.Lazy as S
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as C
 
-import System.IO
+import Control.Concurrent
 import Control.Concurrent.Chan
 import Control.Monad
 
+import Data.Binary.Get
 import Data.Binary.Put
 
 import Control.Exception
+import Prelude hiding (catch)
+import System.IO.Error
+
 
 -------------------------------
 --API Handler Thread
 ------------------------------
+-- | Api handler
+-- 
 runApiHandler :: RequestChan -> ResponseChan -> IO()
 runApiHandler rqChan rsChan = do
   s <- Log.new
@@ -55,7 +78,7 @@ handleHandlerError (s, a) UnknownRqError = do
     putStrLn $ show "[UnknownRqError]"
 handleHandlerError (s, a) e = do
   putStrLn $ show e
-  SBL.sendAll s $ C.pack $ show e
+  S.sendAll s $ C.pack $ show e -- TODO: Send BS to Response Channel
   sClose s
   putStrLn $ "***Host " ++ (show a) ++ "disconnected ***"
 

@@ -2,16 +2,19 @@ module Main (
   main
 ) where
 
+import HMB.Internal.Types
+import HMB.Internal.Network
+import HMB.Internal.API
+
 import Control.Monad
 import Control.Concurrent.Async
 import Control.Concurrent
-import HMB.Internal.Handler
 
 main = do
 
-  sock <- initSocket
-  rqChan <- initReqChan
-  rsChan <- initResChan
+  sock <- initSock
+  rqChan <- initRqChan
+  rsChan <- initRsChan
 
   withAsync (runAcceptor sock rqChan) $ \a1 -> do 
     putStrLn "***Acceptor Thread started***"
