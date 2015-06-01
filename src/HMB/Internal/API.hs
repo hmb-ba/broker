@@ -1,17 +1,20 @@
 -- |
--- -- Module      : HMB.Internal.API
--- -- Copyright   : (c) Marc Juchli, Lorenz Wolf 2015
--- -- License     : BSD-style
--- --
--- -- Maintainer  :
--- -- Stability   : WIP
--- -- Portability : GHC
--- --
--- -- This module ..... 
--- -- --
--- --
+-- Module      : HMB.Internal.API
+-- Copyright   : (c) Marc Juchli, Lorenz Wolf 2015
+-- License     : BSD-style
+--
+-- Maintainer  :
+-- Stability   : WIP
+-- Portability : GHC
+--
+-- This module handles incoming requests. First of all it parses the
+-- received bytes as RequestMessage and proceeds an appropriate action
+-- depending on the delivered API key. After performing the action, an
+-- according ResponseMessage is generated and provided to the Network Layer
+-- for sending back to the client.
+--
 -- -- > import ...
--- 
+--
 module HMB.Internal.API
 ( handleRequest
 , runApiHandler
@@ -43,7 +46,7 @@ import System.IO.Error
 --API Handler Thread
 ------------------------------
 -- | Api handler
--- 
+--
 runApiHandler :: RequestChan -> ResponseChan -> IO()
 runApiHandler rqChan rsChan = do
   s <- Log.new

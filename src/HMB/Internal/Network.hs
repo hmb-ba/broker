@@ -1,3 +1,19 @@
+-- |
+-- Module      : HMB.Internal.Network
+-- Copyright   : (c) Marc Juchli, Lorenz Wolf 2015
+-- License     : BSD-style
+--
+-- Maintainer  :
+-- Stability   : WIP
+-- Portability : GHC
+--
+-- This modules encapsulate action on the network. It initiates Socket
+-- connections and receive bytes from client. It chunks the received bytes
+-- into single requests and provide it to the API Layer. 
+--
+-- > import Network.Socket
+-- > import Network.Socket.ByteString.Lazy
+--
 module HMB.Internal.Network
 (
   initSock,

@@ -1,4 +1,19 @@
--- FIXME (meiersi): more comment would be helpful :-)
+-- |
+-- Module      : HMB.Internal.API
+-- Copyright   : (c) Marc Juchli, Lorenz Wolf 2015
+-- License     : BSD-style
+--
+-- Maintainer  :
+-- Stability   : WIP
+-- Portability : GHC
+--
+-- This module encapsulates actions to the log on the filesystem.
+-- Fundamental functions are appending MessageSet's to Log or reading from
+-- it. 
+
+--
+-- -- > import ...
+--
 module HMB.Internal.Log
 ( new
 , readLog
