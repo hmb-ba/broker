@@ -50,7 +50,7 @@ main = do
   --let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [randBytes])
   --print req
   --replicateM_ 1000 (sendRequest sock $ req)
-  replicateM_ 10 (sendRequest sock $ req)
+  replicateM_ 1000000 (sendRequest sock $ req)
   putStrLn "done produce"
   return ()
 

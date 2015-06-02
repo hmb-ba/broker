@@ -9,7 +9,7 @@
 --
 -- This module encapsulates actions to the log on the filesystem.
 -- Fundamental functions are appending MessageSet's to Log or reading from
--- it. 
+-- it.
 
 --
 -- -- > import ...
@@ -23,7 +23,6 @@ module HMB.Internal.Log
 , getLastLogOffset
 , continueOffset
 , appendLog
-, logData
 , HMB.Internal.Log.insert
 , LogState(..)
 ) where
@@ -139,15 +138,24 @@ new = do
   m <- newMVar Map.empty
   return (LogState m)
 
-
 insert :: (LogState, TopicStr, PartitionNr, [MessageSet]) -> IO ()
 insert (LogState m, t, p, ms) = do
   logs <- takeMVar m
-  let insertOrAppend = (fromMaybe [] (Map.lookup (t, p) logs)) ++ ms
-  putStrLn $ show insertOrAppend
-  putStrLn "\n"
-  putMVar m (Map.insert (t, p) insertOrAppend logs)
+  let oldMs = fromMaybe [] (Map.lookup (t, p) logs)
+  let llo = fromMaybe 0 (lastOffset oldMs)
+  let newMsAssign = continueOffset (nextOffset llo) ms
+  let newMs= oldMs ++ newMsAssign
+  putMVar m (Map.insert (t, p) newMs logs)
 
+
+--writeToDisk :: Logs -> IO ()
+--writeToDisk l = do
+  -- get last entry
+  -- lookup map for values with key of last entry
+  -- if this subset is > treashold, then write
+  -- build messagesets of this subset
+  -- getbaseoffset
+  --
 
 ----------------------------------------------------------
 
@@ -308,23 +316,6 @@ continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 -------------------------------------------------------
 
 
-partitionsOfTopic :: RqTopic -> (TopicStr, [Partition])
-partitionsOfTopic t = (topic, ps)
-  where
-    topic = BC.unpack $ rqTopicName t
-    ps = partitions t
-
-setsOfPartitions :: (TopicStr, [Partition]) -> [(TopicStr, Int, [MessageSet])]
-setsOfPartitions (tn, ps) = map (partitionSet tn) ps
-
-partitionSet :: TopicStr -> Partition -> (TopicStr, Int, [MessageSet])
-partitionSet tn p = (tn, pn, ms)
-  where
-    pn = fromIntegral $ rqPrPartitionNumber p
-    ms = rqPrMessageSet p
-
-logData :: Request -> [(TopicStr, Int, [MessageSet])]
-logData r = concat $ map (setsOfPartitions . partitionsOfTopic) (rqPrTopics r)
 
 nextOffset :: Offset -> Offset
 nextOffset o = o + 1
