@@ -2,21 +2,24 @@ module Main (
   main
 ) where
 
--- FIXME (meiersi): consider to sort alphabetically and introduce an empty
--- line whenever the prefix before the first '.' changes. It is a simple rule
--- and improves readability of the dependency graph.
-import Kafka.Client
-import Network.Socket
-import System.IO
 import Control.Monad
-import Data.IP
-import Data.Word
+import Control.Concurrent
+
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C
-import Control.Concurrent
+import Data.IP
+import Data.Word
+
+import Kafka.Client
+
+import Network.Socket
 import qualified Network.Socket.ByteString.Lazy as SBL
+
 import System.Entropy
+import System.IO
+
+
 
 startTest :: Int -> (b) -> b
 startTest 1 f = f
@@ -36,27 +39,25 @@ main = do
   -------------------------
   -- Send / Receive Loop
   -------------------------
-  -- FIXME (meiersi): consider using a randomly generated string to avoid
-  -- artifacts due to accidental regularity.
   -- FIXME (meiersi): I'd also recommend making the length of this string a
   -- command-line parameter to simplify tests.
   -- FIXME (meiersi): also consider whether you can create criterion
   -- microbenchmarks for all relevant parts of the message processing code
   -- path. This will help you pinpoint performance problems and direct your
   -- optimization efforts.
-
   randBytes <- getEntropy 100
-  let req = packPrRqMessage (C.pack "client", toTopic $  TopicS "performance", 0,  [randBytes | x <- [1..10]])
-  --let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [randBytes])
-  --print req
-  --replicateM_ 1000 (sendRequest sock $ req)
+
+  let topicA = stringToTopic "performance-0"
+  let topicB = stringToTopic "performance-1"
+
+  let bytes = [randBytes | x <- [1..10]]
+  let dat = Data [ T topicA [ P 0 bytes, P 1 bytes], T topicB [P 0 bytes] ]
+
+  let clientId = stringToClientId "benchmark-producer"
+
+  let req = packPrRqMessage clientId dat
+
   replicateM_ 1000000 (sendRequest sock $ req)
   putStrLn "done produce"
   return ()
 
-    --------------------
-    -- Receive Response
-    --------------------
---    input <- SBL.recv sock 4096
---    let response = decodePrResponse input
---    print response
