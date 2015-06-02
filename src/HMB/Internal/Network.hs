@@ -9,7 +9,7 @@
 --
 -- This modules encapsulate action on the network. It initiates Socket
 -- connections and receive bytes from client. It chunks the received bytes
--- into single requests and provide it to the API Layer. 
+-- into single requests and provide it to the API Layer.
 --
 -- > import Network.Socket
 -- > import Network.Socket.ByteString.Lazy
@@ -21,7 +21,7 @@ module HMB.Internal.Network
   initRsChan,
   runAcceptor,
   runResponder
-) where 
+) where
 
 import HMB.Internal.Types
 
@@ -122,8 +122,8 @@ writeToReqChan :: (Socket, SockAddr) -> RequestChan -> B.ByteString -> IO()
 writeToReqChan conn chan req = writeChan chan (conn, req)
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
-handleSocketError (sock, sockaddr) e = do
-  return ()
+handleSocketError (sock, sockaddr) (SocketRecvError e) = putStrLn $ "[Socket Receive Error] " ++ e
+handleSocketError (sock, sockaddr) (SocketSendError e) = putStrLn $ "[Socket Send Error] " ++ e
   --sClose sock
 
 -----------------------
