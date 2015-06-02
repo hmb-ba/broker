@@ -46,7 +46,7 @@ main = do
   -- optimization efforts.
 
   randBytes <- getEntropy 100
-  let req = packPrRqMessage (C.pack "client", C.pack "performance", 0,  [randBytes | x <- [1..10]])
+  let req = packPrRqMessage (C.pack "client", toTopic $  TopicS "performance", 0,  [randBytes | x <- [1..10]])
   --let req = packPrRqMessage (C.pack "client", C.pack "performance", 0, [randBytes])
   --print req
   --replicateM_ 1000 (sendRequest sock $ req)
