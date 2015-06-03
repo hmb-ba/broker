@@ -49,13 +49,13 @@ main = do
 
   let topicA = stringToTopic "performance-0"
   let topicB = stringToTopic "performance-1"
-
-  let bytes = [randBytes | x <- [1..10]]
-  let dat = Data [ T topicA [ P 0 bytes, P 1 bytes], T topicB [P 0 bytes] ]
-
   let clientId = stringToClientId "benchmark-producer"
+  let bytes = [randBytes | x <- [1..10]]
 
-  let req = packPrRqMessage clientId dat
+  let head = Head 0 0 clientId
+  let prod = Produce head [ ToTopic topicA [ ToPart 0 bytes, ToPart 1 bytes], ToTopic topicB [ToPart 0 bytes] ]
+
+  let req = pack prod
 
   replicateM_ 1000000 (sendRequest sock $ req)
   putStrLn "done produce"
