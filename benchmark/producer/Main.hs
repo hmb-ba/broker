@@ -19,8 +19,6 @@ import qualified Network.Socket.ByteString.Lazy as SBL
 import System.Entropy
 import System.IO
 
-
-
 startTest :: Int -> (b) -> b
 startTest 1 f = f
 startTest n f = startTest (n-1) f
@@ -42,10 +40,10 @@ main = do
   -- microbenchmarks for all relevant parts of the message processing code
   -- path. This will help you pinpoint performance problems and direct your
   -- optimization efforts.
-
-
-  let numberOfBytes = 1000
-  let batchSize = 10
+  x <- getLine
+  y <- getLine
+  let numberOfBytes = read x :: Int
+  let batchSize = read y :: Int
 
   randBytes <- getEntropy numberOfBytes
 
