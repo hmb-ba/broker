@@ -92,7 +92,8 @@ recvFromSock (sock, sockaddr) =  do
   -- 'SomeException'! It leads to losing asynchronous exceptions like
   -- 'ThreadKilled' or 'UserInterrupt'. You should just catch exactly the
   -- exceptions that you want to handle.
-  respLen <- try (S.recv sock (4 :: Int64)) :: IO (Either SomeException B.ByteString)
+  respLen <- try ((recvExactly sock (4 :: Int64))) :: IO (Either SomeException B.ByteString)
+  return $ Right B.empty
   case respLen of
     Left e -> return $ Left $ SocketRecvError $ show e
     Right rl -> do
