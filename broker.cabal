@@ -61,5 +61,8 @@ executable performance-producer
     iproute >= 1.3,
     cereal -any,
     entropy -any
+  ghc-options:
+    -threaded
+  ghc-prof-options: -O2
   hs-source-dirs:      benchmark
   default-language:    Haskell2010
