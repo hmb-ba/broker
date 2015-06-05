@@ -18,7 +18,7 @@ module HMB.Internal.Log
 ( new
 , readLog
 , getTopicNames
-, getLastBaseOffset
+, getBaseOffset
 , getLastOffsetPosition
 , getLastLogOffset
 , continueOffset
@@ -203,19 +203,27 @@ maxOffset' [] = 0
 maxOffset' [x] = x
 maxOffset' xs = maximum xs
 
--- the highest number of available log/index files
--- 1. list directory (log folder)
--- 2. determine the offset (int) from containing files (we filter only .log files but could be .index as well)
--- 3. return the max offset
-getLastBaseOffset :: (TopicStr, Int) -> IO BaseOffset
-getLastBaseOffset (t, p) = do
-  bos <- getBaseOffsets (t, p)
-  return $ maxOffset' bos
+nextSmaller :: [Int] -> Offset -> Int
+nextSmaller [] _ = 0
+nextSmaller [x] _ = x
+nextSmaller xs x = last $ filter (<(fromIntegral x)) $ sort xs
 
 getBaseOffsets :: (TopicStr, Int) -> IO [BaseOffset]
 getBaseOffsets (t, p) = do
   dirs <- getDirectoryContents $ getLogFolder (t, p)
   return $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
+
+-- | Returns the base offset for a tuple of topic and partition,
+-- provided by a request message. If the second argument remains Nothing,
+-- the highest number of available log/index files will be return. Otherwise,
+-- the base offset, in whose related log file the provided offset is stored,
+-- is returned.
+getBaseOffset :: (TopicStr, Int) -> Maybe Offset -> IO BaseOffset
+getBaseOffset (t, p) o = do
+  bos <- getBaseOffsets (t, p)
+  case o of
+      Nothing -> return $ maxOffset' bos
+      Just o -> return $ nextSmaller bos o
 
 
 -------------------------------------------------------
@@ -340,7 +348,7 @@ buildOffsetPosition (o, p) = do
 -- ------------
 appendLog :: (TopicStr, Int, [MessageSet]) -> IO ()
 appendLog (t, p, ms) = do
-  bo <- getLastBaseOffset (t, p)
+  bo <- getBaseOffset (t, p) Nothing
   R.runResourceT $ runAppend bo (t, p, ms)
 
 runAppend :: BaseOffset -> (TopicStr, Int, [MessageSet]) -> R.ResourceT IO ()
