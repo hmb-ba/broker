@@ -29,6 +29,7 @@ main = do
   -----------------
   sock <- socket AF_INET Stream defaultProtocol
   setSocketOption sock ReuseAddr 1
+  setSocketOption sock SendBuffer 8192
   let ip = toHostAddress (read "127.0.0.1" :: IPv4)
   --let ip = toHostAddress (read "152.96.193.212" :: IPv4)
   --let ip = toHostAddress (read "152.96.195.4" :: IPv4)
