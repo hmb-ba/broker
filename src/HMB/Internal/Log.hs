@@ -175,9 +175,8 @@ appendLog (t, p, ms) = do
   let bo = 0
   let logPath = getPath (logFolder t p) (logFile bo)
   let bs = runPut $ buildMessageSets ms
-  BL.appendFile logPath bs
-  --withFile logPath WriteMode $ \hdl -> do
-  --    BL.hPut hdl bs
+  withFile logPath AppendMode $ \hdl -> do
+      BL.hPut hdl bs
   return $ (last ms) : []
 
 
