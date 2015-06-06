@@ -138,41 +138,58 @@ new = do
 insert :: (LogState, TopicStr, PartitionNr, [MessageSet]) -> IO ()
 insert (LogState m, t, p, ms) = do
   logs <- takeMVar m
-  let oldMs = find (t, p) logs
-  let llo = fromMaybe 0 (lastOffset oldMs)
-  let newMsAssign = continueOffset (nextOffset llo) ms
-  let newMs= oldMs ++ newMsAssign
-  putMVar m (Map.insert (t, p) newMs logs)
+  let log = find (t, p) logs
+  let llo = fromMaybe 0 (lastOffset log)
+  let newLog = log ++ continueOffset (nextOffset llo) ms
+  let logToSync = Map.insert (t, p) newLog logs
+  syncedLogs <- sync (t, p) logToSync
+  putMVar m syncedLogs
 
-logSize :: [MessageSet] -> Int64
+logSize :: Log -> Int64
 logSize = BL.length . runPut . buildMessageSets
 
 find :: (TopicStr, PartitionNr) -> Logs -> [MessageSet]
 find (t, p) logs = fromMaybe [] (Map.lookup (t, p) logs)
 
-isReadyToSync :: (TopicStr, PartitionNr) -> Logs -> Bool
-isReadyToSync (t, p)  logs = 4096 < (logSize $ find (t, p) logs)
+-- | Controls the number of messages accumulated in each topic (partition)
+-- before the data is flushed to disk and made available to consumers.
+isFlushInterval :: Log -> Bool
+isFlushInterval log = 500 <= (length log)
 
---writeToDisk :: (TopicStr, PartitionNr) -> LogState -> IO ()
---writeToDisk (t, p) m = do
---  -- get last entry
---  -- lookup map for values with key of last entry
---  -- if this subset is > treashold, then write
---  -- build messagesets of this subset
---  -- getbaseoffset
---  logs <- takeMVar m
---  let logToSync = find (t, p) logs
---  case isReadyToSync logToSync of
---      False -> putMVar m (logs)
---      True -> do
---        synced <- sync logToSync
---        let syncedMap = Map.insert ((t, p) synced logs)
---        putMVar m syncedMap
+sync :: (TopicStr, PartitionNr) -> Logs -> IO (Logs)
+sync (t, p) logs = do
+  let log = find (t, p) logs
+  let logToSync = if (offset $ head log) == 0 then log else tail log
+  --putStrLn $ "size of log: " ++ show (length logToSync)
+  case isFlushInterval logToSync of
+      False -> return logs
+      True -> do
+        appendLog (t, p, logToSync)
+        let keepLast = (last logToSync) : []
+        return (Map.insert (t, p) keepLast logs)
 
-sync :: (TopicStr, PartitionNr) -> Log -> IO (Log)
-sync (t, p) log = do
-  putStrLn "dummy"
-  return log
+appendLog :: (TopicStr, Int, [MessageSet]) -> IO (Log)
+appendLog (t, p, ms) = do
+  --putStrLn "appendlog now"
+  --bo <- getBaseOffset (t, p) Nothing -- todo: directory state
+  let bo = 0
+  let logPath = getPath (logFolder t p) (logFile bo)
+  let bs = runPut $ buildMessageSets ms
+  BL.appendFile logPath bs
+  --withFile logPath WriteMode $ \hdl -> do
+  --    BL.hPut hdl bs
+  return $ (last ms) : []
+
+
+-- | The byte interval at which we add an entry to the offset index. When
+-- executing a fetch request the server must do a linear scan for up to this
+-- many bytes to find the correct position in the log to begin and end the
+-- fetch. So setting this value to be larger will mean larger index files (and a
+-- bit more memory usage) but less scanning. However the server will never add
+-- more than one index entry per log append (even if more than
+-- log.index.interval worth of messages are appended).
+isIndexInterval :: Log -> Bool
+isIndexInterval log = 4096 < (logSize log)
 
 ----------------------------------------------------------
 
@@ -363,48 +380,7 @@ buildOffsetPosition (o, p) = do
 ---------------
 -- ResourceT
 -- ------------
-appendLog :: (TopicStr, Int, [MessageSet]) -> IO ()
-appendLog (t, p, ms) = do
-  bo <- getBaseOffset (t, p) Nothing
-  R.runResourceT $ runAppend bo (t, p, ms)
 
-runAppend :: BaseOffset -> (TopicStr, Int, [MessageSet]) -> R.ResourceT IO ()
-runAppend bo (t, p, ms) = do
-  let logPath = getPath (logFolder t p) (logFile 0)
-  let indexPath = getPath (logFolder t p) (indexFile 0)
-  (key, iresource) <- R.allocate (allocateFile indexPath) free
-  -- Register some Action with resources
-  let lop = getLastOffsetPosition' iresource
-  let phys = fromIntegral $ snd lop
-
-
-  (ikey, lresource) <- R.allocate (allocateFile logPath) free
-  -- Register some Action with resources
-
-  let fs = toInteger $ BL.length lresource
-  let llo = fromMaybe 0 (getLastLogOffset' lresource)
-
-  --print $ "last log offset: " ++ (show llo)
-  let bs = runPut $ buildMessageSets $ continueOffset (nextOffset llo) ms
-  R.register $ BL.appendFile logPath bs
-
-  R.release ikey
-
-  case withinIndexInterval fs of
-      False -> return ()
-      True  -> do
-        let ro = fromIntegral(nextOffset llo) - bo -- calculate relativeOffset for Index
-        let op = (fromIntegral ro, fromIntegral fs)
-        k <- R.register $ BL.appendFile indexPath (runPut $ buildOffsetPosition op)
-        return ()
-
-  R.release key
-
-allocateFile :: String -> IO BL.ByteString
-allocateFile path = BL.readFile path -- mmapFileByteStringLazy path Nothing
-
-free :: BL.ByteString -> IO()
-free bs = return () --TODO: free Space
 
 
 -------------------------------------------------------
