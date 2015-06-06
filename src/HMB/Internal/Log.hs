@@ -109,7 +109,13 @@ readLog' (t, p, o) = do
   return ([ x | x <- log, fromIntegral(offset x) >= o])
 
 getTopicNames :: IO [String]
-getTopicNames = (getDirectoryContents "log/")
+getTopicNames = do 
+  dirs <- (getDirectoryContents "log/")
+  return (map topicFromFileName $ filterRootDir dirs)
+
+topicFromFileName :: [Char] -> [Char]
+topicFromFileName = reverse . snd . splitAt 2 . reverse
+
 
 
 ----------------------------------------------------------
