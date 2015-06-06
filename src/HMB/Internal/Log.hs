@@ -19,7 +19,7 @@ module HMB.Internal.Log
 , getTopics
 
 , new
-, HMB.Internal.Log.insert
+, append
 , LogState(..)
 ) where
 
@@ -51,26 +51,29 @@ type TopicStr = String
 type PartitionNr = Int
 
 type LogSegment = (FilemessageSet, OffsetIndex)
-type FilemessageSet = [MessageSet]
+type FilemessageSet = Log
 type OffsetIndex = [OffsetPosition]
 type OffsetPosition = (RelativeOffset, FileOffset)
 type RelativeOffset = Word32
 type FileOffset = Word32
 type BaseOffset = Int
 
-type Logs = Map.Map (TopicStr, PartitionNr) [MessageSet]
+type Logs = Map.Map (TopicStr, PartitionNr) Log
 newtype LogState = LogState (MVar Logs)
 
 getTopics :: IO [String]
 getTopics = getDirectoryContents "log/"
 
+-- | Creates a new and empty log state. The log is represented as a Map
+-- where the key is a tuple of topic and partition.
 new :: IO LogState
 new = do
   m <- newMVar Map.empty
   return (LogState m)
 
-insert :: (LogState, TopicStr, PartitionNr, [MessageSet]) -> IO ()
-insert (LogState m, t, p, ms) = do
+-- | Appends a Log (set of MessageSet) to memory and eventually writes to disk.
+append :: (LogState, TopicStr, PartitionNr, Log) -> IO ()
+append (LogState m, t, p, ms) = do
   logs <- takeMVar m
   let log = find (t, p) logs
   let llo = fromMaybe 0 (lastOffset log)
@@ -79,10 +82,13 @@ insert (LogState m, t, p, ms) = do
   syncedLogs <- sync (t, p) logToSync
   putMVar m syncedLogs
 
+-- | Returns the effective (built) size of a log
 logSize :: Log -> Int64
 logSize = BL.length . runPut . buildMessageSets
 
-find :: (TopicStr, PartitionNr) -> Logs -> [MessageSet]
+-- | Find a Log within the map of Logs. If nothing is found, return an empty
+-- List
+find :: (TopicStr, PartitionNr) -> Logs -> Log
 find (t, p) logs = fromMaybe [] (Map.lookup (t, p) logs)
 
 -- | Controls the number of messages accumulated in each topic (partition)
@@ -90,6 +96,8 @@ find (t, p) logs = fromMaybe [] (Map.lookup (t, p) logs)
 isFlushInterval :: Log -> Bool
 isFlushInterval log = 500 <= length log
 
+-- | Synchronize collected log with disk, but only if the flush interval is
+-- reached.
 sync :: (TopicStr, PartitionNr) -> Logs -> IO Logs
 sync (t, p) logs = do
   let log = find (t, p) logs
@@ -98,13 +106,14 @@ sync (t, p) logs = do
   if isFlushInterval logToSync
       then return logs
       else do
-          append (t, p, logToSync)
+          write (t, p, logToSync)
           let keepLast = [last logToSync]
           return (Map.insert (t, p) keepLast logs)
 
-append :: (TopicStr, Int, [MessageSet]) -> IO ()
-append (t, p, ms) = do
-  --putStrLn "append now"
+-- | Effectively write log to disk in append mode
+write :: (TopicStr, Int, Log) -> IO ()
+write (t, p, ms) = do
+  --putStrLn "write now"
   --bo <- getBaseOffset (t, p) Nothing -- todo: directory state
   let bo = 0
   let logPath = getPath (logFolder t p) (logFile bo)
@@ -204,7 +213,7 @@ assignOffset o ms = MessageSet o (len ms) (message ms)
 
 -- | Increment offset over every provided messageset based on a given offset
 -- (typically last log offset)
-continueOffset :: Offset -> [MessageSet] -> [MessageSet]
+continueOffset :: Offset -> Log -> [MessageSet]
 continueOffset o [] = []
 continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 
@@ -269,7 +278,7 @@ getFileSize path = do
   return size
 
 
-readLog :: (TopicStr, Int) -> Offset -> IO [MessageSet]
+readLog :: (TopicStr, Int) -> Offset -> IO Log
 readLog tp o = do
   bos <- getBaseOffsets tp
   let bo = getBaseOffsetFor bos o
@@ -314,7 +323,7 @@ getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head 
 -- Search forward the log file  for the position of the last offset that is greater than or equal to the target offset
 -- and return its physical position
 
-getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO [MessageSet]
+getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Log
 -- ParseLog starting from given physical Position.
 getLogFrom (t, p) bo (_, phy) = do
   let path = getPath (logFolder t p) (logFile bo)
@@ -323,7 +332,7 @@ getLogFrom (t, p) bo (_, phy) = do
   bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
   return $ runGet decodeLog bs
 
-decodeLog :: Get [MessageSet]
+decodeLog :: Get Log
 decodeLog = do
   empty <- isEmpty
   if empty
@@ -332,7 +341,7 @@ decodeLog = do
               mss <- decodeLog
               return $ ms : mss
 
-filterMessageSetsFor :: [MessageSet] -> Offset -> [MessageSet]
+filterMessageSetsFor :: Log -> Offset -> Log
 filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms
 
 

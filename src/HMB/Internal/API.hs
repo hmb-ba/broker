@@ -106,7 +106,7 @@ handleProduceRequest :: Request -> Log.LogState -> IO (Either HandleError BL.Byt
 handleProduceRequest req s = do
   --mapM Log.appendLog (Log.logData req)
 
-  w <- tryIOError( mapM Log.insert [
+  w <- tryIOError( mapM Log.append [
                     (s, BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
                     | x <- rqPrTopics req, y <- partitions x
                           ]
