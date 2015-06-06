@@ -1,5 +1,5 @@
 -- |
--- Module      : HMB.Internal.API
+-- Module      : HMB.Internal.Log
 -- Copyright   : (c) Marc Juchli, Lorenz Wolf 2015
 -- License     : BSD-style
 --
@@ -11,17 +11,14 @@
 -- Fundamental functions are appending MessageSet's to Log or reading from
 -- it.
 
---
--- -- > import ...
---
 module HMB.Internal.Log
-( readLog
-, getTopics
+  ( readLog
 
-, new
-, append
-, LogState(..)
-) where
+  , new
+  , append
+  , getTopics
+  , LogState(..)
+  ) where
 
 import Kafka.Protocol
 
@@ -50,8 +47,7 @@ import Control.Concurrent.MVar
 type TopicStr = String
 type PartitionNr = Int
 
-type LogSegment = (FilemessageSet, OffsetIndex)
-type FilemessageSet = Log
+type LogSegment = (Log, OffsetIndex)
 type OffsetIndex = [OffsetPosition]
 type OffsetPosition = (RelativeOffset, FileOffset)
 type RelativeOffset = Word32
@@ -218,11 +214,9 @@ continueOffset o [] = []
 continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 
 
-
 -------------------------------------------------------
--- Index
+-- Read
 -------------------------------------------------------
-
 -- decode as long as physical position != 0 which means last index has passed
 decodeIndexEntry :: Get [OffsetPosition]
 decodeIndexEntry = do
@@ -240,25 +234,6 @@ decodeIndexEntry = do
 decodeIndex :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, [OffsetPosition])
 decodeIndex = runGetOrFail decodeIndexEntry
 
-getLastOffsetPosition' :: BL.ByteString -> OffsetPosition
-getLastOffsetPosition' bs =
-  case decodeIndex bs of
-    Left (bs, bo, e) -> (0,0)
-    Right (bs, bo, ops) -> lastIndex ops
-
-appendIndex path op = do
-  let bs = runPut $ buildOffsetPosition op
-  BL.appendFile path bs
-
-buildOffsetPosition :: OffsetPosition -> Put
-buildOffsetPosition (o, p) = do
-    putWord32be o
-    putWord32be p
-
-
--------------------------------------------------------
--- Read
--------------------------------------------------------
 getLog :: Get Log
 getLog = do
   empty <- isEmpty

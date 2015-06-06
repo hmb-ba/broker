@@ -22,6 +22,7 @@ module HMB.Internal.API
 
 import HMB.Internal.Types
 import qualified HMB.Internal.Log as Log
+import qualified HMB.Internal.Index as Index
 import Kafka.Protocol
 
 import Network.Socket
