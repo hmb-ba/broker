@@ -12,6 +12,7 @@
 module HMB.Internal.Index
   ( new
   , append
+  , isInterval
   , IndexState(..)
   ) where
 
@@ -21,6 +22,8 @@ import Data.Word
 import Data.List hiding (find)
 import qualified Data.Map.Lazy as Map
 import Data.Maybe
+import Data.Int
+
 import Text.Printf
 
 import Control.Concurrent.MVar
@@ -51,13 +54,15 @@ new = do
 append :: (IndexState, TopicStr, PartitionNr, Log) -> IO ()
 append (IndexState m, t, p, ms) = do
   indices <- takeMVar m
-  let bo = 0 -- todo: directory state
   let old = find (t, p) indices
+  let bo = 0 -- todo: directory state
   let path = getPath (logFolder t p) (indexFile bo)
   fs <- getFileSize path
+  putStrLn $ "file size of log: " ++ show fs
   let new = pack (fromIntegral (offset (head ms)) - bo, fs)
   let newIndex = old ++ [new]
   let newIndices = Map.insert (t, p) newIndex indices
+  putStrLn $ show newIndices
   -- 4. write to disk
   putMVar m indices
 
@@ -67,10 +72,18 @@ append (IndexState m, t, p, ms) = do
 find :: (TopicStr, PartitionNr) -> Indices -> [OffsetPosition]
 find (t, p) indices = fromMaybe [] (Map.lookup (t, p) indices)
 
+-- | The byte interval at which we add an entry to the offset index. When
+-- executing a fetch request the server must do a linear scan for up to this
+-- many bytes to find the correct position in the log to begin and end the
+-- fetch. So setting this value to be larger will mean larger index files (and a
+-- bit more memory usage) but less scanning. However the server will never add
+-- more than one index entry per log append (even if more than
+-- log.index.interval worth of messages are appended).
+isInterval :: Int64 -> Bool
+isInterval s = 4096 < s
+
 getFileSize :: String -> IO Integer
-getFileSize path = do
-    size <- withFile path ReadMode (\hdl -> hFileSize hdl)
-    return size
+getFileSize path = withFile path ReadMode (\hdl -> hFileSize hdl)
 
 pack :: (Int, Integer) -> OffsetPosition
 pack (o, fs) = (fromIntegral o, fromIntegral fs)
@@ -90,7 +103,7 @@ pack (o, fs) = (fromIntegral o, fromIntegral fs)
 --    Right (bs, bo, ops) -> lastIndex ops
 
 
----------DUPLICATE----------
+---------DUPLICATE -> should be in manager----------
 logFolder :: TopicStr -> PartitionNr -> String
 logFolder t p = "log/" ++ t ++ "_" ++ show p
 

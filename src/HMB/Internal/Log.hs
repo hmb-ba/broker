@@ -17,6 +17,7 @@ module HMB.Internal.Log
 
   , new
   , find
+  , size
   , append
   , getTopics
   , lastOffset
@@ -83,8 +84,8 @@ append' (LogState m, t, p, ms) = do
   putMVar m syncedLogs
 
 -- | Returns the effective (built) size of a log
-logSize :: Log -> Int64
-logSize = BL.length . runPut . buildMessageSets
+size :: Log -> Int64
+size = BL.length . runPut . buildMessageSets
 
 -- | Find a Log within the map of Logs. If nothing is found, return an empty
 -- List
@@ -120,15 +121,6 @@ write (t, p, ms) = do
   let bs = runPut $ buildMessageSets ms
   withFile logPath AppendMode $ \hdl -> BL.hPut hdl bs
 
--- | The byte interval at which we add an entry to the offset index. When
--- executing a fetch request the server must do a linear scan for up to this
--- many bytes to find the correct position in the log to begin and end the
--- fetch. So setting this value to be larger will mean larger index files (and a
--- bit more memory usage) but less scanning. However the server will never add
--- more than one index entry per log append (even if more than
--- log.index.interval worth of messages are appended).
-isIndexInterval :: Log -> Bool
-isIndexInterval log = 4096 < logSize log
 
 ----------------------------------------------------------
 
