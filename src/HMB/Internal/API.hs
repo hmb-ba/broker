@@ -106,7 +106,8 @@ handleProduceRequest :: RequestMessage -> Log.LogState -> IO (Either HandleError
 handleProduceRequest rm s = do
   --mapM Log.appendLog (Log.logData req)
   let req = rqRequest rm
-  w <- tryIOError( mapM Log.insert [
+
+  w <- tryIOError( mapM Log.append [
                     (s, BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
                     | x <- rqPrTopics req, y <- partitions x
                           ]
@@ -172,7 +173,7 @@ packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (
 
 packMdRs :: IO Response
 packMdRs = do
-  ts <- Log.getTopicNames
+  ts <- Log.getTopics
   tss <- mapM packMdRsPayloadTopic ts
   return $ MetadataResponse
             ([RsMdPayloadBroker 0 (fromIntegral $ BL.length $ C.pack "localhost") (BC.pack "localhost") 4343]) --single broker solution
