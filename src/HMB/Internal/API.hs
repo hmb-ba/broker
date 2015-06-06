@@ -21,8 +21,10 @@ module HMB.Internal.API
 ) where
 
 import HMB.Internal.Types
+import qualified HMB.Internal.LogManager as LogManager
 import qualified HMB.Internal.Log as Log
 import qualified HMB.Internal.Index as Index
+
 import Kafka.Protocol
 
 import Network.Socket
@@ -50,10 +52,10 @@ import System.IO.Error
 --
 runApiHandler :: RequestChan -> ResponseChan -> IO()
 runApiHandler rqChan rsChan = do
-  s <- Log.new
+  s <- LogManager.new
   handlerLoop s rqChan rsChan
 
-handlerLoop :: Log.LogState -> RequestChan -> ResponseChan -> IO ()
+handlerLoop :: LogManager.State -> RequestChan -> ResponseChan -> IO ()
 handlerLoop s rqChan rsChan = do
   (conn, req) <- readChan rqChan
   case readRequest req of
@@ -87,7 +89,7 @@ handleHandlerError (s, a) e = do
   putStrLn $ "***Host " ++ (show a) ++ "disconnected ***"
 
 
-handleRequest :: RequestMessage -> Log.LogState -> IO (Either HandleError BL.ByteString)
+handleRequest :: RequestMessage -> LogManager.State -> IO (Either HandleError BL.ByteString)
 handleRequest rm s = do
    handle <- case rqApiKey rm of
     0  -> handleProduceRequest (rm) s
@@ -103,12 +105,12 @@ handleRequest rm s = do
 -----------------
 -- Handle ProduceRequest
 -----------------
-handleProduceRequest :: RequestMessage -> Log.LogState -> IO (Either HandleError BL.ByteString)
+handleProduceRequest :: RequestMessage -> LogManager.State -> IO (Either HandleError BL.ByteString)
 handleProduceRequest rm s = do
   --mapM Log.appendLog (Log.logData req)
   let req = rqRequest rm
 
-  w <- tryIOError( mapM Log.append [
+  w <- tryIOError( mapM LogManager.append [
                     (s, BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
                     | x <- rqPrTopics req, y <- partitions x
                           ]
@@ -127,7 +129,7 @@ packProduceResponse rm = ResponseMessage resLen (rqCorrelationId rm) response
                       (rqTopicName t)
                       (fromIntegral $ length [error])
                       [error]
-    error = RsPrPayload 0 0 0 
+    error = RsPrPayload 0 0 0
 
 -----------------
 -- Handle FetchRequest

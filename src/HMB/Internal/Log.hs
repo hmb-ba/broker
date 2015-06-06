@@ -16,8 +16,11 @@ module HMB.Internal.Log
   , getTopicNames
 
   , new
+  , find
   , append
   , getTopics
+  , lastOffset
+  , continueOffset
   , LogState(..)
   ) where
 
@@ -69,14 +72,14 @@ new = do
   return (LogState m)
 
 -- | Appends a Log (set of MessageSet) to memory and eventually writes to disk.
-append :: (LogState, TopicStr, PartitionNr, Log) -> IO ()
-append (LogState m, t, p, ms) = do
+append' :: (LogState, TopicStr, PartitionNr, Log) -> IO ()
+append' (LogState m, t, p, ms) = do
   logs <- takeMVar m
   let log = find (t, p) logs
   let llo = fromMaybe 0 (lastOffset log)
-  let newLog = log ++ continueOffset (nextOffset llo) ms
-  let logToSync = Map.insert (t, p) newLog logs
-  syncedLogs <- sync (t, p) logToSync
+  let newLog = log ++ continueOffset (llo + 1) ms
+  let newLogs = Map.insert (t, p) newLog logs
+  syncedLogs <- append (t, p) newLogs
   putMVar m syncedLogs
 
 -- | Returns the effective (built) size of a log
@@ -95,8 +98,8 @@ isFlushInterval log = 500 <= length log
 
 -- | Synchronize collected log with disk, but only if the flush interval is
 -- reached.
-sync :: (TopicStr, PartitionNr) -> Logs -> IO Logs
-sync (t, p) logs = do
+append :: (TopicStr, PartitionNr) -> Logs -> IO Logs
+append (t, p) logs = do
   let log = find (t, p) logs
   let logToSync = if (offset $ head log) == 0 then log else tail log
   --putStrLn $ "size of log: " ++ show (length logToSync)
@@ -197,9 +200,6 @@ getBaseOffset (t, p) o = do
 
 
 -------------------------------------------------------
-
-nextOffset :: Offset -> Offset
-nextOffset o = o + 1
 
 lastOffset :: Log -> Maybe Offset
 lastOffset [] = Nothing
