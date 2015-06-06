@@ -172,7 +172,7 @@ packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (
 
 packMdRs :: IO Response
 packMdRs = do
-  ts <- Log.getTopicNames
+  ts <- Log.getTopics
   tss <- mapM packMdRsPayloadTopic ts
   return $ MetadataResponse
             1

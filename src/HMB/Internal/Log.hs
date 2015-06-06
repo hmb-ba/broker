@@ -16,23 +16,22 @@
 --
 module HMB.Internal.Log
 ( readLog
-, getTopicNames
+, getTopics
 
 , new
 , HMB.Internal.Log.insert
 , LogState(..)
 ) where
 
-import qualified Data.ByteString as BS
+import Kafka.Protocol
+
+import Data.List hiding (find)
+import qualified Data.Map.Lazy as Map
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Char8 as BC
-import qualified Data.ByteString.Lazy.Char8 as BCL
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.Maybe
-import qualified Data.Map.Lazy as Map
 import Data.Word
-import Data.List hiding (find)
 import Data.Int
 
 import Text.Printf
@@ -41,75 +40,7 @@ import System.Directory
 import System.IO.MMap
 import System.IO
 
-import qualified Control.Monad.Trans.Resource as R
 import Control.Concurrent.MVar
-import Control.Conditional
-import Control.Monad
-import Control.Applicative
-
-import Kafka.Protocol
-
-
-----------------------------------------------------------
--- Log Writer (old)
-----------------------------------------------------------
-
-type MessageInput = (TopicStr, PartitionStr, Log)
-type PartitionStr = Int
-
---writeLog :: MessageInput -> IO()
---writeLog (topicName, partitionNumber, log) = do
---  createDirectoryIfMissing False $ logFolder topicName partitionNumber
---  let filePath = getPath (logFolder topicName partitionNumber) (logFile 0)
---  ifM (doesFileExist filePath)
---      (appendToLog filePath (topicName,partitionNumber, log))
---      (newLog filePath (topicName,partitionNumber, log))
-
-
-
-maxOffset :: [Offset] -> Offset
-maxOffset [] = 0
-maxOffset [x] = x
-maxOffset (x:xs) = max x (maxOffset xs)
-
-
---newLog :: String -> MessageInput -> IO()
---newLog filepath (t, p, log) = do
---  let l = buildLog 0 log
---  BL.writeFile filepath l
---  return ()
-
-
-getMaxOffsetOfLog :: MessageInput -> IO Offset
-getMaxOffsetOfLog (t, p, _) = do
-  log <- readLogFromBeginning (t,p) --TODO: optimieren, dass nich gesamter log gelesen werden muss
-  return (maxOffset $ [ offset x | x <- log ])
-
-getLog :: Get Log
-getLog = do
-  empty <- isEmpty
-  if empty
-      then return []
-      else do messageSet <- messageSetParser
-              messageSets <- getLog
-              return (messageSet:messageSets)
-
-parseLog :: String -> IO Log
-parseLog a = do
-  input <- BL.readFile a
-  return (runGet getLog input)
-
-readLogFromBeginning :: (String, Int) -> IO Log
-readLogFromBeginning (t, p) = parseLog $
-    getPath (logFolder t p) (logFile 0)
-
-readLog' :: (String, Int, Int) -> IO Log
-readLog' (t, p, o) = do
-  log <- readLogFromBeginning (t,p)
-  return ([ x | x <- log, fromIntegral(offset x) >= o])
-
-getTopicNames :: IO [String]
-getTopicNames = (getDirectoryContents "log/")
 
 
 ----------------------------------------------------------
@@ -129,6 +60,9 @@ type BaseOffset = Int
 
 type Logs = Map.Map (TopicStr, PartitionNr) [MessageSet]
 newtype LogState = LogState (MVar Logs)
+
+getTopics :: IO [String]
+getTopics = getDirectoryContents "log/"
 
 new :: IO LogState
 new = do
@@ -154,31 +88,28 @@ find (t, p) logs = fromMaybe [] (Map.lookup (t, p) logs)
 -- | Controls the number of messages accumulated in each topic (partition)
 -- before the data is flushed to disk and made available to consumers.
 isFlushInterval :: Log -> Bool
-isFlushInterval log = 500 <= (length log)
+isFlushInterval log = 500 <= length log
 
-sync :: (TopicStr, PartitionNr) -> Logs -> IO (Logs)
+sync :: (TopicStr, PartitionNr) -> Logs -> IO Logs
 sync (t, p) logs = do
   let log = find (t, p) logs
   let logToSync = if (offset $ head log) == 0 then log else tail log
   --putStrLn $ "size of log: " ++ show (length logToSync)
-  case isFlushInterval logToSync of
-      False -> return logs
-      True -> do
-        appendLog (t, p, logToSync)
-        let keepLast = (last logToSync) : []
-        return (Map.insert (t, p) keepLast logs)
+  if isFlushInterval logToSync
+      then return logs
+      else do
+          append (t, p, logToSync)
+          let keepLast = [last logToSync]
+          return (Map.insert (t, p) keepLast logs)
 
-appendLog :: (TopicStr, Int, [MessageSet]) -> IO (Log)
-appendLog (t, p, ms) = do
-  --putStrLn "appendlog now"
+append :: (TopicStr, Int, [MessageSet]) -> IO ()
+append (t, p, ms) = do
+  --putStrLn "append now"
   --bo <- getBaseOffset (t, p) Nothing -- todo: directory state
   let bo = 0
   let logPath = getPath (logFolder t p) (logFile bo)
   let bs = runPut $ buildMessageSets ms
-  withFile logPath AppendMode $ \hdl -> do
-      BL.hPut hdl bs
-  return $ (last ms) : []
-
+  withFile logPath AppendMode $ \hdl -> BL.hPut hdl bs
 
 -- | The byte interval at which we add an entry to the offset index. When
 -- executing a fetch request the server must do a linear scan for up to this
@@ -188,7 +119,7 @@ appendLog (t, p, ms) = do
 -- more than one index entry per log append (even if more than
 -- log.index.interval worth of messages are appended).
 isIndexInterval :: Log -> Bool
-isIndexInterval log = 4096 < (logSize log)
+isIndexInterval log = 4096 < logSize log
 
 ----------------------------------------------------------
 
@@ -216,17 +147,17 @@ lastIndex xs = last xs
 ----------------------------------------------------------
 
 
-offsetFromFileName :: [Char] -> Int
+offsetFromFileName :: String -> Int
 offsetFromFileName = read . reverse . snd . splitAt 4 . reverse
 
-isLogFile :: [Char] -> Bool
+isLogFile :: String -> Bool
 isLogFile x = ".log" `isInfixOf` x
 
-isDirectory :: [Char] -> Bool
-isDirectory x = elem x [".", ".."]
+isDirectory :: String -> Bool
+isDirectory x = x `elem` [".", ".."]
 
 filterRootDir :: [String] -> [String]
-filterRootDir d = filter (\x -> not $ isDirectory x) d
+filterRootDir = filter (\x -> not $ isDirectory x)
 
 getLogFolder :: (TopicStr, Int) -> String
 getLogFolder (t, p) = "log/" ++ t ++ "_" ++ show p
@@ -261,6 +192,27 @@ getBaseOffset (t, p) o = do
 
 -------------------------------------------------------
 
+nextOffset :: Offset -> Offset
+nextOffset o = o + 1
+
+lastOffset :: Log -> Maybe Offset
+lastOffset [] = Nothing
+lastOffset xs = Just $ (offset . last) xs
+
+assignOffset :: Offset -> MessageSet -> MessageSet
+assignOffset o ms = MessageSet o (len ms) (message ms)
+
+-- | Increment offset over every provided messageset based on a given offset
+-- (typically last log offset)
+continueOffset :: Offset -> [MessageSet] -> [MessageSet]
+continueOffset o [] = []
+continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
+
+
+
+-------------------------------------------------------
+-- Index
+-------------------------------------------------------
 
 -- decode as long as physical position != 0 which means last index has passed
 decodeIndexEntry :: Get [OffsetPosition]
@@ -279,93 +231,12 @@ decodeIndexEntry = do
 decodeIndex :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, [OffsetPosition])
 decodeIndex = runGetOrFail decodeIndexEntry
 
-getLastOffsetPosition :: (TopicStr, Int) -> BaseOffset -> IO OffsetPosition
--- get offset of last index entry
--- 1. open file to bs
--- 2. parse as long as not 0
--- 3. read offset/physical from last element
-getLastOffsetPosition (t, p) bo = do
-  let path = getPath (getLogFolder (t, p)) (indexFile bo)
-  -- check if file exists
-  bs <- mmapFileByteStringLazy path Nothing
-  case decodeIndex bs of
-    Left (bs, bo, e)   -> do
-        print e
-        return $ (0,0) --todo: error handling
-    Right (bs, bo, ops) -> return $ lastIndex ops
-
 getLastOffsetPosition' :: BL.ByteString -> OffsetPosition
 getLastOffsetPosition' bs =
   case decodeIndex bs of
     Left (bs, bo, e) -> (0,0)
     Right (bs, bo, ops) -> lastIndex ops
 
-
--------------------------------------------------------
-
-
-getFileSize :: String -> IO Integer
-getFileSize path = do
-  size <- withFile path ReadMode (\hdl -> hFileSize hdl)
---  hdl <- openFile path ReadMode
---  size <- hFileSize hdl
---  print size
-  return size
-
-lastOffset :: Log -> Maybe Offset
-lastOffset [] = Nothing
-lastOffset xs = Just $ (offset . last) xs
-
-getLastLogOffset :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Offset
--- find last Offset in the log, start search from given offsetposition
--- 1. get file Size for end of file position
--- 2. open log file from start position given by offsetPosition to eof position
--- 3. parse log and get highest offset
-getLastLogOffset (t, p) bo (rel, phys) = do
-  let path = getPath (logFolder t p) (logFile bo)
-  -- check if file exists
-  fs <- getFileSize path
-  --print $ "physical start: " ++ (show $ fromIntegral phys)
-  --print $ "filesize: " ++ show fs
-
-  -- FIXME (meiersi): this will leak resources! I suggest to read up on
-  -- 'ResourceT' to handle that properly
-  -- <https://hackage.haskell.org/package/resourcet>.
---  bs <- mmapFileByteStringLazy path $ Nothing -- Just (fromIntegral phys, (fromIntegral (fs) - fromIntegral phys))
-
-  hdl <- openFile path ReadMode
-  bs <- BL.hGetContents hdl
-
-  case lastOffset $ runGet getLog bs of
-    Nothing -> return 0
-    Just lo -> return lo
-
-getLastLogOffset' :: BL.ByteString -> Maybe Offset
-getLastLogOffset' bs = lastOffset $ runGet getLog bs
-
--------------------------------------------------------
-
-
-assignOffset :: Offset -> MessageSet -> MessageSet
-assignOffset o ms = MessageSet o (len ms) (message ms)
-
--- increment offset over every provided messageset based on a given offset (typically last log offset)
-continueOffset :: Offset -> [MessageSet] -> [MessageSet]
-continueOffset o [] = []
-continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
-
--------------------------------------------------------
-
-
-
-nextOffset :: Offset -> Offset
-nextOffset o = o + 1
-
-withinIndexInterval :: Integer -> Bool
-withinIndexInterval 0 = False
-withinIndexInterval fs = 0 == (fs `mod` 100)
-
-appendIndex :: String -> OffsetPosition -> IO ()
 appendIndex path op = do
   let bs = runPut $ buildOffsetPosition op
   BL.appendFile path bs
@@ -379,6 +250,24 @@ buildOffsetPosition (o, p) = do
 -------------------------------------------------------
 -- Read
 -------------------------------------------------------
+getLog :: Get Log
+getLog = do
+  empty <- isEmpty
+  if empty
+      then return []
+      else do messageSet <- messageSetParser
+              messageSets <- getLog
+              return (messageSet:messageSets)
+
+
+getFileSize :: String -> IO Integer
+getFileSize path = do
+  size <- withFile path ReadMode (\hdl -> hFileSize hdl)
+--  hdl <- openFile path ReadMode
+--  size <- hFileSize hdl
+--  print size
+  return size
+
 
 readLog :: (TopicStr, Int) -> Offset -> IO [MessageSet]
 readLog tp o = do
