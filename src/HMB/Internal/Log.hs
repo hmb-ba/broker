@@ -13,6 +13,7 @@
 
 module HMB.Internal.Log
   ( readLog
+  , getTopicNames
 
   , new
   , append
@@ -319,4 +320,14 @@ decodeLog = do
 filterMessageSetsFor :: Log -> Offset -> Log
 filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms
 
+---------------------------------
+--TopicNames for Metadata Request
+-------------------------------
+getTopicNames :: IO [String]
+getTopicNames = do
+  dirs <- (getDirectoryContents "log/")
+  return (map topicFromFileName $ filterRootDir dirs)
+
+topicFromFileName :: [Char] -> [Char]
+topicFromFileName = reverse . snd . splitAt 2 . reverse
 

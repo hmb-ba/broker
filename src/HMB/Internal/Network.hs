@@ -45,6 +45,8 @@ initSock :: IO Socket
 initSock = do
   sock <- socket AF_INET Stream 0
   setSocketOption sock ReuseAddr 1
+  --setSocketOption sock SendBuffer 131072
+  setSocketOption sock KeepAlive 1
   bindSocket sock (SockAddrInet 4343 iNADDR_ANY)
   listen sock 2
   return sock

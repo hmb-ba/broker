@@ -90,10 +90,10 @@ handleHandlerError (s, a) e = do
 handleRequest :: RequestMessage -> Log.LogState -> IO (Either HandleError BL.ByteString)
 handleRequest rm s = do
    handle <- case rqApiKey rm of
-    0  -> handleProduceRequest (rqRequest rm) s
+    0  -> handleProduceRequest (rm) s
     1  -> handleFetchRequest (rqRequest rm)
     --2  -> Right $ putStrLn "OffsetRequest"
-    3  -> handleMetadataRequest (rqRequest rm)
+    3  -> handleMetadataRequest (rm)
     --8  -> Right $ putStrLn "OffsetCommitRequest"
     --9  -> Right $ putStrLn "OffsetFetchRequest"
     --10 -> Right $ putStrLn "ConsumerMetadataRequest"
@@ -103,9 +103,10 @@ handleRequest rm s = do
 -----------------
 -- Handle ProduceRequest
 -----------------
-handleProduceRequest :: Request -> Log.LogState -> IO (Either HandleError BL.ByteString)
-handleProduceRequest req s = do
+handleProduceRequest :: RequestMessage -> Log.LogState -> IO (Either HandleError BL.ByteString)
+handleProduceRequest rm s = do
   --mapM Log.appendLog (Log.logData req)
+  let req = rqRequest rm
 
   w <- tryIOError( mapM Log.append [
                     (s, BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
@@ -114,25 +115,19 @@ handleProduceRequest req s = do
           )
   case w of
       Left e -> return $ Left $ PrWriteLogError 0 "todo"
-      Right r -> return $ Right $ buildPrResponseMessage packProduceResponse
+      Right r -> return $ Right $ runPut $ buildPrResponseMessage $ packProduceResponse $ rm
 
-  return $ Right C.empty
-
-packProduceResponse :: ResponseMessage
-packProduceResponse =
-  let error = RsPrPayload 0 0 0
-  in
-  let response = ProduceResponse
-        (RsTopic
-          (fromIntegral $ BL.length $ C.pack "topicHardCoded")
-          (BC.pack "topicHardCoded")
-          (fromIntegral $ length [error])
-          [error]
-        )
-        in
-  let responseMessage = ResponseMessage 0 1 [response]
-  in
-  responseMessage
+packProduceResponse :: RequestMessage -> ResponseMessage
+packProduceResponse rm = ResponseMessage resLen (rqCorrelationId rm) response
+  where
+    resLen = (fromIntegral (BL.length $ runPut $ buildProduceResponse $ response) + 4 )
+    response = ProduceResponse (fromIntegral $ length topics) topics
+    topics = (map topic (rqPrTopics $ rqRequest $ rm))
+    topic t = RsTopic (fromIntegral $ BC.length $ rqTopicName t)
+                      (rqTopicName t)
+                      (fromIntegral $ length [error])
+                      [error]
+    error = RsPrPayload 0 0 0 
 
 -----------------
 -- Handle FetchRequest
@@ -151,15 +146,15 @@ packPartitionsToFtRsPayload t p = do
 packLogToFtRs :: RqTopic -> IO Response
 packLogToFtRs t = do
     rss <- (mapM (packPartitionsToFtRsPayload $ rqTopicName $ t) $ partitions t)
-    return $ FetchResponse
+    return $ FetchResponse 1 [(RsTopic
         (rqTopicNameLen t)
         (rqTopicName t )
         (numPartitions t )
-        rss
+        rss)]
 
 handleFetchRequest :: Request -> IO (Either HandleError BL.ByteString)
 handleFetchRequest req = do
-  w <- tryIOError(liftM (ResponseMessage 0 1) $ mapM packLogToFtRs (rqFtTopics req))
+  w <- tryIOError(liftM (ResponseMessage 0 0) $ packLogToFtRs (head $ rqFtTopics req))
   case w of
     Left e -> return $ Left $ FtReadLogError 0 $ show e
     Right rsms -> return $ Right $ runPut $ buildFtRsMessage rsms
@@ -168,12 +163,16 @@ handleFetchRequest req = do
 -----------------
 -- Handle MetadataRequest
 -----------------
+
+packMdRsPartitionMetadata :: RsMdPartitionMetadata
+packMdRsPartitionMetadata = RsMdPartitionMetadata 0 0 0 1 [0] 1 [0]
+
 packMdRsPayloadTopic :: String -> IO RsPayload
-packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (BC.pack t) 0 [] --TODO: Partition Metadata
+packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (BC.pack t) 1 [packMdRsPartitionMetadata]
 
 packMdRs :: IO Response
 packMdRs = do
-  ts <- Log.getTopics
+  ts <- Log.getTopicNames
   tss <- mapM packMdRsPayloadTopic ts
   return $ MetadataResponse
             1
@@ -181,7 +180,7 @@ packMdRs = do
             (fromIntegral $ length tss)
             tss
 
-handleMetadataRequest :: Request -> IO (Either HandleError BL.ByteString)
-handleMetadataRequest req = do
+handleMetadataRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
+handleMetadataRequest rm = do
   res <- packMdRs
-  return $ Right $ runPut $ buildMdRsMessage $ ResponseMessage 0 1 [res]
+  return $ Right $ runPut $ buildMdRsMessage $ ResponseMessage (fromIntegral(BL.length $ runPut $ buildMdRs res) + 4) (rqCorrelationId rm) res
