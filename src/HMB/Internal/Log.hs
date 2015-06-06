@@ -104,11 +104,11 @@ sync (t, p) logs = do
   let logToSync = if (offset $ head log) == 0 then log else tail log
   --putStrLn $ "size of log: " ++ show (length logToSync)
   if isFlushInterval logToSync
-      then return logs
-      else do
+      then do
           write (t, p, logToSync)
           let keepLast = [last logToSync]
           return (Map.insert (t, p) keepLast logs)
+      else return logs
 
 -- | Effectively write log to disk in append mode
 write :: (TopicStr, Int, Log) -> IO ()
