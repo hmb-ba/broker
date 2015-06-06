@@ -15,14 +15,10 @@
 -- -- > import ...
 --
 module HMB.Internal.Log
-( new
-, readLog
+( readLog
 , getTopicNames
-, getBaseOffset
-, getLastOffsetPosition
-, getLastLogOffset
-, continueOffset
-, appendLog
+
+, new
 , HMB.Internal.Log.insert
 , LogState(..)
 ) where
@@ -36,7 +32,8 @@ import Data.Binary.Put
 import Data.Maybe
 import qualified Data.Map.Lazy as Map
 import Data.Word
-import Data.List
+import Data.List hiding (find)
+import Data.Int
 
 import Text.Printf
 
@@ -141,21 +138,41 @@ new = do
 insert :: (LogState, TopicStr, PartitionNr, [MessageSet]) -> IO ()
 insert (LogState m, t, p, ms) = do
   logs <- takeMVar m
-  let oldMs = fromMaybe [] (Map.lookup (t, p) logs)
+  let oldMs = find (t, p) logs
   let llo = fromMaybe 0 (lastOffset oldMs)
   let newMsAssign = continueOffset (nextOffset llo) ms
   let newMs= oldMs ++ newMsAssign
   putMVar m (Map.insert (t, p) newMs logs)
 
+logSize :: [MessageSet] -> Int64
+logSize = BL.length . runPut . buildMessageSets
 
---writeToDisk :: Logs -> IO ()
---writeToDisk l = do
-  -- get last entry
-  -- lookup map for values with key of last entry
-  -- if this subset is > treashold, then write
-  -- build messagesets of this subset
-  -- getbaseoffset
-  --
+find :: (TopicStr, PartitionNr) -> Logs -> [MessageSet]
+find (t, p) logs = fromMaybe [] (Map.lookup (t, p) logs)
+
+isReadyToSync :: (TopicStr, PartitionNr) -> Logs -> Bool
+isReadyToSync (t, p)  logs = 4096 < (logSize $ find (t, p) logs)
+
+--writeToDisk :: (TopicStr, PartitionNr) -> LogState -> IO ()
+--writeToDisk (t, p) m = do
+--  -- get last entry
+--  -- lookup map for values with key of last entry
+--  -- if this subset is > treashold, then write
+--  -- build messagesets of this subset
+--  -- getbaseoffset
+--  logs <- takeMVar m
+--  let logToSync = find (t, p) logs
+--  case isReadyToSync logToSync of
+--      False -> putMVar m (logs)
+--      True -> do
+--        synced <- sync logToSync
+--        let syncedMap = Map.insert ((t, p) synced logs)
+--        putMVar m syncedMap
+
+sync :: (TopicStr, PartitionNr) -> Log -> IO (Log)
+sync (t, p) log = do
+  putStrLn "dummy"
+  return log
 
 ----------------------------------------------------------
 
