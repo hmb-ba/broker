@@ -17,6 +17,7 @@
 module HMB.Internal.Log
 ( readLog
 , getTopics
+, getTopicNames
 
 , new
 , append

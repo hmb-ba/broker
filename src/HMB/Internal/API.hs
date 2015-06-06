@@ -116,14 +116,12 @@ handleProduceRequest rm s = do
       Left e -> return $ Left $ PrWriteLogError 0 "todo"
       Right r -> return $ Right $ runPut $ buildPrResponseMessage $ packProduceResponse $ rm
 
-  --return $ Right C.empty
-
 packProduceResponse :: RequestMessage -> ResponseMessage
-packProduceResponse rm = ResponseMessage resLen (rqCorrelationId rm) 1 responses 
-  where 
-    resLen = (fromIntegral (BL.length $ runPut $ buildProduceResponse $ head responses) + 4 + 4)
-    responses = (map response (rqPrTopics $ rqRequest $ rm))
-    response t = ProduceResponse $ topic t
+packProduceResponse rm = ResponseMessage resLen (rqCorrelationId rm) response
+  where
+    resLen = (fromIntegral (BL.length $ runPut $ buildProduceResponse $ response) + 4 )
+    response = ProduceResponse (fromIntegral $ length topics) topics
+    topics = (map topic (rqPrTopics $ rqRequest $ rm))
     topic t = RsTopic (fromIntegral $ BC.length $ rqTopicName t)
                       (rqTopicName t)
                       (fromIntegral $ length [error])
@@ -147,15 +145,15 @@ packPartitionsToFtRsPayload t p = do
 packLogToFtRs :: RqTopic -> IO Response
 packLogToFtRs t = do
     rss <- (mapM (packPartitionsToFtRsPayload $ rqTopicName $ t) $ partitions t)
-    return $ FetchResponse
+    return $ FetchResponse 1 [(RsTopic
         (rqTopicNameLen t)
         (rqTopicName t )
         (numPartitions t )
-        rss
+        rss)]
 
 handleFetchRequest :: Request -> IO (Either HandleError BL.ByteString)
 handleFetchRequest req = do
-  w <- tryIOError(liftM (ResponseMessage 0 0 1) $ mapM packLogToFtRs (rqFtTopics req))
+  w <- tryIOError(liftM (ResponseMessage 0 0) $ packLogToFtRs (head $ rqFtTopics req))
   case w of
     Left e -> return $ Left $ FtReadLogError 0 $ show e
     Right rsms -> return $ Right $ runPut $ buildFtRsMessage rsms
@@ -173,9 +171,10 @@ packMdRsPayloadTopic t = return $ RsMdPayloadTopic 0 (fromIntegral $ length t) (
 
 packMdRs :: IO Response
 packMdRs = do
-  ts <- Log.getTopics
+  ts <- Log.getTopicNames
   tss <- mapM packMdRsPayloadTopic ts
   return $ MetadataResponse
+            1
             ([RsMdPayloadBroker 0 (fromIntegral $ BL.length $ C.pack "localhost") (BC.pack "localhost") 4343]) --single broker solution
             (fromIntegral $ length tss)
             tss
@@ -183,4 +182,4 @@ packMdRs = do
 handleMetadataRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
 handleMetadataRequest rm = do
   res <- packMdRs
-  return $ Right $ runPut $ buildMdRsMessage $ ResponseMessage (fromIntegral(BL.length $ runPut $ buildMdRs res) + 4 + 4) (rqCorrelationId rm) 1 [res]
+  return $ Right $ runPut $ buildMdRsMessage $ ResponseMessage (fromIntegral(BL.length $ runPut $ buildMdRs res) + 4) (rqCorrelationId rm) res
