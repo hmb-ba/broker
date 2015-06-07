@@ -60,7 +60,7 @@ append indices (t, p) ms = do
   fs <- getFileSize path
   putStrLn $ "file size of log: " ++ show fs
   putStrLn $ "message to index for: " ++ (show $ head ms)
-  let new = pack (fromIntegral (offset (head ms)) - bo, fs)
+  let new = pack (fromIntegral (msOffset (head ms)) - bo, fs)
   let newIndex = old ++ [new]
   let newIndices = Map.insert (t, p) newIndex indices
   putStrLn $ show newIndices

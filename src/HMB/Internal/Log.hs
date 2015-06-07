@@ -109,7 +109,7 @@ isFlushInterval log = 500 <= length log
 append :: (TopicStr, PartitionNr) -> Logs -> IO Logs
 append (t, p) logs = do
   let log = find (t, p) logs
-  let logToSync = if (offset $ head log) == 0 then log else tail log
+  let logToSync = if (msOffset $ head log) == 0 then log else tail log
   --putStrLn $ "size of log: " ++ show (length logToSync)
   if isFlushInterval logToSync
       then do
@@ -202,10 +202,10 @@ getBaseOffset (t, p) o = do
 
 lastOffset :: Log -> Maybe Offset
 lastOffset [] = Nothing
-lastOffset xs = Just $ (offset . last) xs
+lastOffset xs = Just $ (msOffset . last) xs
 
 assignOffset :: Offset -> MessageSet -> MessageSet
-assignOffset o ms = MessageSet o (len ms) (message ms)
+assignOffset o ms = MessageSet o (msLen ms) (msMessage ms)
 
 -- | Increment offset over every provided messageset based on a given offset
 -- (typically last log offset)
@@ -317,7 +317,7 @@ decodeLog = do
               return $ ms : mss
 
 filterMessageSetsFor :: Log -> Offset -> Log
-filterMessageSetsFor ms to = filter (\x -> offset x >= fromIntegral to) ms
+filterMessageSetsFor ms to = filter (\x -> msOffset x >= fromIntegral to) ms
 
 ---------------------------------
 --TopicNames for Metadata Request
