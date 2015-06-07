@@ -90,9 +90,9 @@ size = BL.length . runPut . buildMessageSets
 
 sizeRange :: Maybe Offset -> Maybe Offset -> Log -> Int64
 sizeRange Nothing Nothing log = size log
-sizeRange Nothing (Just to) log = size $ filter (\x -> offset x <= to) log
-sizeRange (Just from) Nothing log = size $ filter (\x -> offset x >= from) log
-sizeRange (Just from) (Just to) log = size $ filter (\x -> offset x >=from && offset x <= to) log
+sizeRange Nothing (Just to) log = size $ filter (\x -> msOffset x <= to) log
+sizeRange (Just from) Nothing log = size $ filter (\x -> msOffset x >= from) log
+sizeRange (Just from) (Just to) log = size $ filter (\x -> msOffset x >=from && msOffset x <= to) log
 
 -- | Find a Log within the map of Logs. If nothing is found, return an empty
 -- List
