@@ -111,8 +111,8 @@ handleProduceRequest rm s = do
   let req = rqRequest rm
 
   w <- tryIOError( mapM LogManager.append [
-                    (s, BC.unpack(rqTopicName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
-                    | x <- rqPrTopics req, y <- partitions x
+                    (s, BC.unpack(rqToName x), fromIntegral(rqPrPartitionNumber y), rqPrMessageSet y )
+                    | x <- rqPrTopics req, y <- rqToPartitions x
                           ]
           )
   case w of
@@ -125,8 +125,8 @@ packProduceResponse rm = ResponseMessage resLen (rqCorrelationId rm) response
     resLen = (fromIntegral (BL.length $ runPut $ buildProduceResponse $ response) + 4 )
     response = ProduceResponse (fromIntegral $ length topics) topics
     topics = (map topic (rqPrTopics $ rqRequest $ rm))
-    topic t = RsTopic (fromIntegral $ BC.length $ rqTopicName t)
-                      (rqTopicName t)
+    topic t = RsTopic (fromIntegral $ BC.length $ rqToName t)
+                      (rqToName t)
                       (fromIntegral $ length [error])
                       [error]
     error = RsPrPayload 0 0 0
@@ -147,11 +147,11 @@ packPartitionsToFtRsPayload t p = do
 
 packLogToFtRs :: RqTopic -> IO Response
 packLogToFtRs t = do
-    rss <- (mapM (packPartitionsToFtRsPayload $ rqTopicName $ t) $ partitions t)
+    rss <- (mapM (packPartitionsToFtRsPayload $ rqToName $ t) $ rqToPartitions t)
     return $ FetchResponse 1 [(RsTopic
-        (rqTopicNameLen t)
-        (rqTopicName t )
-        (numPartitions t )
+        (rqToNameLen t)
+        (rqToName t )
+        (rqToNumPartitions t )
         rss)]
 
 handleFetchRequest :: Request -> IO (Either HandleError BL.ByteString)
@@ -186,3 +186,5 @@ handleMetadataRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
 handleMetadataRequest rm = do
   res <- packMdRs
   return $ Right $ runPut $ buildMdRsMessage $ ResponseMessage (fromIntegral(BL.length $ runPut $ buildMdRs res) + 4) (rqCorrelationId rm) res
+
+
