@@ -23,7 +23,6 @@ import Control.Concurrent.MVar
 import Data.Maybe
 import qualified Data.Map.Lazy as Map
 
-
 -- dupl
 type TopicStr = String
 type PartitionNr = Int
@@ -50,12 +49,19 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
   indices <- takeMVar is
   let index = Index.find (t, p) indices
   let bo = 0 --TODO: log.getbaseoffset
-  let lastIndexedOffset = fromIntegral $ (fst $ last index) + bo
+  let lastIndexedOffset = case index of
+                            [] -> fromIntegral 0
+                            op -> fromIntegral (fst $ last op) + bo
+  putStrLn $ "lastindexedoffset: " ++ show lastIndexedOffset
   if Index.isInterval (Log.sizeRange (Just lastIndexedOffset) Nothing newLog)
      then do
-        Index.append indices (t, p) newLog
-     else return ()
-  putMVar is indices
+        putStrLn "index now"
+        syncedIndices <- Index.append indices (t, p) newLog
+        putStrLn $ show syncedIndices
+        putMVar is syncedIndices
+     else do
+        putStrLn "no index"
+        putMVar is indices
 
   syncedLogs <- Log.append (t, p) newLogs
   putMVar ls syncedLogs

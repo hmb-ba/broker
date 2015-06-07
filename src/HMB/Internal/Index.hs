@@ -52,7 +52,7 @@ new = do
 
 -- | Appends an OffsetPosition to memory and eventually writes to disk. The
 -- index will be kept in memory as long as the broker is running.
-append :: Indices -> (TopicStr, PartitionNr) -> Log -> IO ()
+append :: Indices -> (TopicStr, PartitionNr) -> Log -> IO Indices
 append indices (t, p) ms = do
   let old = find (t, p) indices
   let bo = 0 -- todo: directory state
@@ -62,8 +62,8 @@ append indices (t, p) ms = do
   putStrLn $ "message to index for: " ++ (show $ head ms)
   let new = pack (fromIntegral (msOffset (head ms)) - bo, fs)
   let newIndex = old ++ [new]
-  let newIndices = Map.insert (t, p) newIndex indices
-  putStrLn $ show newIndices
+  return $ Map.insert (t, p) newIndex indices
+
   -- 4. write to disk
 
 -- | Find a list of OffsetPosition within the map of Indices. If nothing is
