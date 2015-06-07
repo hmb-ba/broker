@@ -90,7 +90,7 @@ runConnection conn chan False = return () --TODO: Better solution for breaking o
 
 recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError B.ByteString)
 recvFromSock (sock, sockaddr) =  do
-  -- FIXME (meiersi): it is very bad stayle to indiscriminately catch
+  -- FIXME (meiersi): it is very bad style to indiscriminately catch
   -- 'SomeException'! It leads to losing asynchronous exceptions like
   -- 'ThreadKilled' or 'UserInterrupt'. You should just catch exactly the
   -- exceptions that you want to handle.
@@ -104,7 +104,7 @@ recvFromSock (sock, sockaddr) =  do
         Left (b, bo, e) -> return $ Left $ SocketRecvError $ show e
         Right (b, bo, l) ->  do
           req <- recvExactly sock l  -- TODO: Socket Error handling :: IO (Either SomeException BS.ByteString)
-          return $! Right req
+          return $! Right (B.append rl req)
    where
       getLength = runGetOrFail $ fromIntegral <$> getWord32be
 
