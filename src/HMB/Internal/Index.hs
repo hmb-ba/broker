@@ -14,10 +14,12 @@ module HMB.Internal.Index
   , append
   , isInterval
   , find
+  , lastOrNull
   , IndexState(..)
   ) where
 
 import Kafka.Protocol
+import qualified HMB.Internal.LogConfig as L
 
 import Data.Word
 import Data.List hiding (find)
@@ -26,21 +28,15 @@ import Data.Maybe
 import Data.Int
 
 import Text.Printf
-
 import Control.Concurrent.MVar
-
 import System.IO
 
 
--- dupl
-type TopicStr = String
-type PartitionNr = Int
---
 type OffsetPosition = (RelativeOffset, FileOffset)
 type RelativeOffset = Word32
 type FileOffset = Word32
 
-type Indices = Map.Map (TopicStr, PartitionNr) [OffsetPosition]
+type Indices = Map.Map (L.TopicStr, L.PartitionNr) [OffsetPosition]
 newtype IndexState = IndexState (MVar Indices)
 
 -- | Creates a new and empty IndexState. The index is represented as a Map
@@ -52,24 +48,21 @@ new = do
 
 -- | Appends an OffsetPosition to memory and eventually writes to disk. The
 -- index will be kept in memory as long as the broker is running.
-append :: Indices -> (TopicStr, PartitionNr) -> Log -> IO Indices
-append indices (t, p) ms = do
+append :: Indices -> (L.TopicStr, L.PartitionNr) -> Log -> Int64 -> IO Indices
+append indices (t, p) ms logSize = do
   let old = find (t, p) indices
-  let bo = 0 -- todo: directory state
-  let path = getPath (logFolder t p) (indexFile bo)
+  let bo = 0 -- PERFORMANCE
+  let path = L.getPath (L.logFolder t p) (L.indexFile bo)
   fs <- getFileSize path
-  putStrLn $ "file size of log: " ++ show fs
-  putStrLn $ "message to index for: " ++ (show $ head ms)
-  let new = pack (fromIntegral (msOffset (head ms)) - bo, fs)
+  let new = pack (fromIntegral (msOffset (last ms)) - bo, fs + (fromIntegral logSize)) -- filesize needs size of encoded ms too
   let newIndex = old ++ [new]
   return $ Map.insert (t, p) newIndex indices
-
-  -- 4. write to disk
+  -- TODO: write to disk
 
 -- | Find a list of OffsetPosition within the map of Indices. If nothing is
 -- found, return an empty List
 -- TODO: make generic
-find :: (TopicStr, PartitionNr) -> Indices -> [OffsetPosition]
+find :: (L.TopicStr, L.PartitionNr) -> Indices -> [OffsetPosition]
 find (t, p) indices = fromMaybe [] (Map.lookup (t, p) indices)
 
 -- | The byte interval at which we add an entry to the offset index. When
@@ -88,6 +81,10 @@ getFileSize path = withFile path ReadMode (\hdl -> hFileSize hdl)
 pack :: (Int, Integer) -> OffsetPosition
 pack (o, fs) = (fromIntegral o, fromIntegral fs)
 
+lastOrNull :: [OffsetPosition] -> OffsetPosition
+lastOrNull [] = (0,0)
+lastOrNull xs = last xs
+
 --buildOffsetPosition :: OffsetPosition -> Put
 --buildOffsetPosition (o, p) = do
 --    putWord32be o
@@ -102,19 +99,3 @@ pack (o, fs) = (fromIntegral o, fromIntegral fs)
 --    Left (bs, bo, e) -> (0,0)
 --    Right (bs, bo, ops) -> lastIndex ops
 
-
----------DUPLICATE -> should be in manager----------
-logFolder :: TopicStr -> PartitionNr -> String
-logFolder t p = "log/" ++ t ++ "_" ++ show p
-
-leadingZero :: Int -> String
-leadingZero = printf "%020d"
-
-logFile :: Int -> String
-logFile o = leadingZero o ++ ".log"
-
-indexFile :: Int -> String
-indexFile o = leadingZero o ++ ".index"
-
-getPath :: String -> String -> String
-getPath folder file = folder ++ "/" ++ file

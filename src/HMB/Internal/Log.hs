@@ -23,10 +23,12 @@ module HMB.Internal.Log
   , getTopics
   , lastOffset
   , continueOffset
+  , getBaseOffset
   , LogState(..)
   ) where
 
 import Kafka.Protocol
+import qualified HMB.Internal.LogConfig as L
 
 import Data.List hiding (find)
 import qualified Data.Map.Lazy as Map
@@ -36,8 +38,6 @@ import Data.Binary.Put
 import Data.Maybe
 import Data.Word
 import Data.Int
-
-import Text.Printf
 
 import System.Directory
 import System.IO.MMap
@@ -50,17 +50,12 @@ import Control.Concurrent.MVar
 -- Log Writer
 ----------------------------------------------------------
 
-type TopicStr = String
-type PartitionNr = Int
-
-type LogSegment = (Log, OffsetIndex)
-type OffsetIndex = [OffsetPosition]
 type OffsetPosition = (RelativeOffset, FileOffset)
 type RelativeOffset = Word32
 type FileOffset = Word32
 type BaseOffset = Int
 
-type Logs = Map.Map (TopicStr, PartitionNr) Log
+type Logs = Map.Map (L.TopicStr, L.PartitionNr) Log
 newtype LogState = LogState (MVar Logs)
 
 getTopics :: IO [String]
@@ -73,21 +68,11 @@ new = do
   m <- newMVar Map.empty
   return (LogState m)
 
--- | Appends a Log (set of MessageSet) to memory and eventually writes to disk.
-append' :: (LogState, TopicStr, PartitionNr, Log) -> IO ()
-append' (LogState m, t, p, ms) = do
-  logs <- takeMVar m
-  let log = find (t, p) logs
-  let llo = fromMaybe 0 (lastOffset log)
-  let newLog = log ++ continueOffset (llo + 1) ms
-  let newLogs = Map.insert (t, p) newLog logs
-  syncedLogs <- append (t, p) newLogs
-  putMVar m syncedLogs
-
 -- | Returns the effective (built) size of a log
 size :: Log -> Int64
 size = BL.length . runPut . buildMessageSets
 
+-- | Determines the size of a log between a given range of offset
 sizeRange :: Maybe Offset -> Maybe Offset -> Log -> Int64
 sizeRange Nothing Nothing log = size log
 sizeRange Nothing (Just to) log = size $ filter (\x -> msOffset x <= to) log
@@ -96,7 +81,7 @@ sizeRange (Just from) (Just to) log = size $ filter (\x -> msOffset x >=from && 
 
 -- | Find a Log within the map of Logs. If nothing is found, return an empty
 -- List
-find :: (TopicStr, PartitionNr) -> Logs -> Log
+find :: (L.TopicStr, L.PartitionNr) -> Logs -> Log
 find (t, p) logs = fromMaybe [] (Map.lookup (t, p) logs)
 
 -- | Controls the number of messages accumulated in each topic (partition)
@@ -106,7 +91,7 @@ isFlushInterval log = 500 <= length log
 
 -- | Synchronize collected log with disk, but only if the flush interval is
 -- reached.
-append :: (TopicStr, PartitionNr) -> Logs -> IO Logs
+append :: (L.TopicStr, L.PartitionNr) -> Logs -> IO Logs
 append (t, p) logs = do
   let log = find (t, p) logs
   let logToSync = if (msOffset $ head log) == 0 then log else tail log
@@ -119,41 +104,17 @@ append (t, p) logs = do
       else return logs
 
 -- | Effectively write log to disk in append mode
-write :: (TopicStr, Int, Log) -> IO ()
+write :: (L.TopicStr, Int, Log) -> IO ()
 write (t, p, ms) = do
-  --putStrLn "write now"
-  --bo <- getBaseOffset (t, p) Nothing -- todo: directory state
+  --let bo = 0 -- PERFORMANCE
+  bo <- getBaseOffset (t, p) Nothing -- todo: directory state
   let bo = 0
-  let logPath = getPath (logFolder t p) (logFile bo)
+  let logPath = L.getPath (L.logFolder t p) (L.logFile bo)
   let bs = runPut $ buildMessageSets ms
   withFile logPath AppendMode $ \hdl -> BL.hPut hdl bs
 
 
 ----------------------------------------------------------
-
-
-logFolder :: TopicStr -> PartitionNr -> String
-logFolder t p = "log/" ++ t ++ "_" ++ show p
-
-leadingZero :: Int -> String
-leadingZero = printf "%020d"
-
-logFile :: Int -> String
-logFile o = leadingZero o ++ ".log"
-
-indexFile :: Int -> String
-indexFile o = leadingZero o ++ ".index"
-
-getPath :: String -> String -> String
-getPath folder file = folder ++ "/" ++ file
-
-lastIndex :: [OffsetPosition] -> OffsetPosition
-lastIndex [] = (0,0)
-lastIndex xs = last xs
-
-
-----------------------------------------------------------
-
 
 offsetFromFileName :: String -> Int
 offsetFromFileName = read . reverse . snd . splitAt 4 . reverse
@@ -167,7 +128,7 @@ isDirectory x = x `elem` [".", ".."]
 filterRootDir :: [String] -> [String]
 filterRootDir = filter (\x -> not $ isDirectory x)
 
-getLogFolder :: (TopicStr, Int) -> String
+getLogFolder :: (L.TopicStr, Int) -> String
 getLogFolder (t, p) = "log/" ++ t ++ "_" ++ show p
 
 maxOffset' :: [Int] -> Int
@@ -180,7 +141,7 @@ nextSmaller [] _ = 0
 nextSmaller [x] _ = x
 nextSmaller xs x = last $ filter (<(fromIntegral x)) $ sort xs
 
-getBaseOffsets :: (TopicStr, Int) -> IO [BaseOffset]
+getBaseOffsets :: (L.TopicStr, Int) -> IO [BaseOffset]
 getBaseOffsets (t, p) = do
   dirs <- getDirectoryContents $ getLogFolder (t, p)
   return $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
@@ -190,7 +151,7 @@ getBaseOffsets (t, p) = do
 -- the highest number of available log/index files will be return. Otherwise,
 -- the base offset, in whose related log file the provided offset is stored,
 -- is returned.
-getBaseOffset :: (TopicStr, Int) -> Maybe Offset -> IO BaseOffset
+getBaseOffset :: (L.TopicStr, Int) -> Maybe Offset -> IO BaseOffset
 getBaseOffset (t, p) o = do
   bos <- getBaseOffsets (t, p)
   case o of
@@ -253,7 +214,7 @@ getFileSize path = do
   return size
 
 
-readLog :: (TopicStr, Int) -> Offset -> IO Log
+readLog :: (L.TopicStr, Int) -> Offset -> IO Log
 readLog tp o = do
   bos <- getBaseOffsets tp
   let bo = getBaseOffsetFor bos o
@@ -262,11 +223,11 @@ readLog tp o = do
   log <- getLogFrom tp bo op
   return $ filterMessageSetsFor log o
 
-indexLookup :: (TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition
+indexLookup :: (L.TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition
 ---locate the offset/location pair for the greatest offset less than or equal
 -- to the target offset.
 indexLookup (t, p) bo to = do
-  let path = getPath (getLogFolder (t, p)) (indexFile bo)
+  let path = L.getPath (getLogFolder (t, p)) (L.indexFile bo)
   bs <- mmapFileByteStringLazy path Nothing
   case decodeIndex bs of
     Left (bs, byo, e)   -> do
@@ -298,10 +259,10 @@ getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head 
 -- Search forward the log file  for the position of the last offset that is greater than or equal to the target offset
 -- and return its physical position
 
-getLogFrom :: (TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Log
+getLogFrom :: (L.TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Log
 -- ParseLog starting from given physical Position.
 getLogFrom (t, p) bo (_, phy) = do
-  let path = getPath (logFolder t p) (logFile bo)
+  let path = L.getPath (L.logFolder t p) (L.logFile bo)
   fs <- getFileSize path
   --print phy
   bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
