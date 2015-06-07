@@ -18,6 +18,7 @@ module HMB.Internal.Log
   , new
   , find
   , size
+  , sizeRange
   , append
   , getTopics
   , lastOffset
@@ -86,6 +87,12 @@ append' (LogState m, t, p, ms) = do
 -- | Returns the effective (built) size of a log
 size :: Log -> Int64
 size = BL.length . runPut . buildMessageSets
+
+sizeRange :: Maybe Offset -> Maybe Offset -> Log -> Int64
+sizeRange Nothing Nothing log = size log
+sizeRange Nothing (Just to) log = size $ filter (\x -> offset x <= to) log
+sizeRange (Just from) Nothing log = size $ filter (\x -> offset x >= from) log
+sizeRange (Just from) (Just to) log = size $ filter (\x -> offset x >=from && offset x <= to) log
 
 -- | Find a Log within the map of Logs. If nothing is found, return an empty
 -- List

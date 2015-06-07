@@ -13,6 +13,7 @@ module HMB.Internal.Index
   ( new
   , append
   , isInterval
+  , find
   , IndexState(..)
   ) where
 
@@ -51,20 +52,19 @@ new = do
 
 -- | Appends an OffsetPosition to memory and eventually writes to disk. The
 -- index will be kept in memory as long as the broker is running.
-append :: (IndexState, TopicStr, PartitionNr, Log) -> IO ()
-append (IndexState m, t, p, ms) = do
-  indices <- takeMVar m
+append :: Indices -> (TopicStr, PartitionNr) -> Log -> IO ()
+append indices (t, p) ms = do
   let old = find (t, p) indices
   let bo = 0 -- todo: directory state
   let path = getPath (logFolder t p) (indexFile bo)
   fs <- getFileSize path
   putStrLn $ "file size of log: " ++ show fs
+  putStrLn $ "message to index for: " ++ (show $ head ms)
   let new = pack (fromIntegral (offset (head ms)) - bo, fs)
   let newIndex = old ++ [new]
   let newIndices = Map.insert (t, p) newIndex indices
   putStrLn $ show newIndices
   -- 4. write to disk
-  putMVar m indices
 
 -- | Find a list of OffsetPosition within the map of Indices. If nothing is
 -- found, return an empty List

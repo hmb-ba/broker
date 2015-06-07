@@ -42,10 +42,15 @@ main = do
   -- microbenchmarks for all relevant parts of the message processing code
   -- path. This will help you pinpoint performance problems and direct your
   -- optimization efforts.
+  print "Number of bytes: "
   x <- getLine
+  print "Baching factor: "
   y <- getLine
+  print "Number of repeats: "
+  z <- getLine
   let numberOfBytes = read x :: Int
   let batchSize = read y :: Int
+  let numberOfRepeats = read z :: Int
 
   randBytes <- getEntropy numberOfBytes
 
@@ -57,7 +62,7 @@ main = do
   let head = Head 0 0 clientId
   let req = Produce head [ ToTopic topicA [ ToPart 0 bytes]]
 
-  replicateM_ 1000000 (sendRequest sock $ req)
+  replicateM_ numberOfRepeats (sendRequest sock $ req)
   putStrLn "done produce"
   return ()
 

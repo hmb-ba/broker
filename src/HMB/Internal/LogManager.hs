@@ -45,9 +45,18 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
   let llo = fromMaybe 0 (Log.lastOffset log)
   let newLog = log ++ Log.continueOffset (llo + 1) ms
   let newLogs = Map.insert (t, p) newLog logs
-  if Index.isInterval (Log.size newLog)
-     then Index.append (Index.IndexState is, t, p, newLog)
+  putStrLn $ "newLog size: " ++ (show $ Log.size newLog)
+
+  indices <- takeMVar is
+  let index = Index.find (t, p) indices
+  let bo = 0 --TODO: log.getbaseoffset
+  let lastIndexedOffset = fromIntegral $ (fst $ last index) + bo
+  if Index.isInterval (Log.sizeRange (Just lastIndexedOffset) Nothing newLog)
+     then do
+        Index.append indices (t, p) newLog
      else return ()
+  putMVar is indices
+
   syncedLogs <- Log.append (t, p) newLogs
   putMVar ls syncedLogs
 
