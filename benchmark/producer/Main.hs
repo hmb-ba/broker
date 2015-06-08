@@ -64,5 +64,6 @@ main = do
 
   replicateM_ numberOfRepeats (sendRequest sock $ req)
   putStrLn "done produce"
+  threadDelay 10000000
   return ()
 
