@@ -219,7 +219,7 @@ readLog tp o = do
   bos <- getBaseOffsets tp
   let bo = getBaseOffsetFor bos o
   op <- indexLookup tp bo o
-  print op
+  --print op
   log <- getLogFrom tp bo op
   return $ filterMessageSetsFor log o
 
@@ -234,7 +234,7 @@ indexLookup (t, p) bo to = do
         print e
         return $ (0,0) --todo: error handling
     Right (bs, byo, ops) -> do
-      print ops
+      --print ops
       return $ getOffsetPositionFor ops bo to
 
 getOffsetPositionFor :: [OffsetPosition] -> BaseOffset -> Offset -> OffsetPosition

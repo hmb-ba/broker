@@ -50,7 +50,7 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
   if Index.isInterval (Log.sizeRange (Just lastIndexedOffset) Nothing newLog)
      then do
         syncedIndices <- Index.append indices (t, p) newLog (Log.size newLog)
-        putStrLn $ "Index created, now: " ++ show syncedIndices
+        putStrLn $ "Index created, now: "-- ++ show syncedIndices
         putMVar is syncedIndices
      else do
         putMVar is indices
