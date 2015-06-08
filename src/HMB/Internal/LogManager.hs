@@ -44,8 +44,8 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
 
   indices <- takeMVar is
   let index = Index.find (t, p) indices
-  --let bo = 0 -- PERFORMANCE
-  bo <- Log.getBaseOffset (t, p) Nothing
+  let bo = 0 -- PERFORMANCE
+  --bo <- Log.getBaseOffset (t, p) Nothing
   let lastIndexedOffset = fromIntegral (fst $ Index.lastOrNull index) + (fromIntegral bo)
   if Index.isInterval (Log.sizeRange (Just lastIndexedOffset) Nothing newLog)
      then do

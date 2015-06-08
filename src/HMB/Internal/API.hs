@@ -20,6 +20,18 @@ module HMB.Internal.API
 , runApiHandler
 ) where
 
+
+import Control.Exception
+import Control.Concurrent
+import Control.Concurrent.Chan
+import Control.Monad
+
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy.Char8 as C
+import Data.Binary.Get
+import Data.Binary.Put
+
 import HMB.Internal.Types
 import qualified HMB.Internal.LogManager as LogManager
 import qualified HMB.Internal.Log as Log
@@ -28,20 +40,11 @@ import qualified HMB.Internal.Index as Index
 import Kafka.Protocol
 
 import Network.Socket
+import Network.Info
 import qualified Network.Socket.ByteString.Lazy as S
-import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Char8 as BC
-import qualified Data.ByteString.Lazy.Char8 as C
 
-import Control.Concurrent
-import Control.Concurrent.Chan
-import Control.Monad
-
-import Data.Binary.Get
-import Data.Binary.Put
-
-import Control.Exception
 import Prelude hiding (catch)
+
 import System.IO.Error
 
 
@@ -176,11 +179,18 @@ packMdRs :: IO Response
 packMdRs = do
   ts <- Log.getTopicNames
   tss <- mapM packMdRsPayloadTopic ts
+  (NetworkInterface name ipv4 ipv6 mac) <- getHostIp
   return $ MetadataResponse
             1
-            ([RsMdPayloadBroker 0 (fromIntegral $ BL.length $ C.pack "localhost") (BC.pack "localhost") 4343]) --single broker solution
+            ([RsMdPayloadBroker 0 (fromIntegral $ BL.length $ C.pack $ show ipv4) (BC.pack $ show ipv4) 4343]) --single broker solution
             (fromIntegral $ length tss)
             tss
+
+getHostIp :: IO NetworkInterface
+getHostIp = do
+  ns <- getNetworkInterfaces
+  return $ head $ filter (\(NetworkInterface name ipv4 ipv6 mac) -> name == "eth0") ns
+
 
 handleMetadataRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
 handleMetadataRequest rm = do

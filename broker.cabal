@@ -46,7 +46,8 @@ executable broker
     mmap -any,
     cereal -any,
     resourcet -any,
-    containers -any
+    containers -any,
+    network-info -any
   hs-source-dirs:      src
   default-language:    Haskell2010
 

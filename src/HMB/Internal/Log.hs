@@ -106,9 +106,8 @@ append (t, p) logs = do
 -- | Effectively write log to disk in append mode
 write :: (L.TopicStr, Int, Log) -> IO ()
 write (t, p, ms) = do
-  --let bo = 0 -- PERFORMANCE
-  bo <- getBaseOffset (t, p) Nothing -- todo: directory state
-  let bo = 0
+  let bo = 0 -- PERFORMANCE
+  --bo <- getBaseOffset (t, p) Nothing -- todo: directory state
   let logPath = L.getPath (L.logFolder t p) (L.logFile bo)
   let bs = runPut $ buildMessageSets ms
   withFile logPath AppendMode $ \hdl -> BL.hPut hdl bs
