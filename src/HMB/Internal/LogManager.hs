@@ -39,9 +39,8 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
   --Log.append (ls, t, p, ms)
   logs <- takeMVar ls
   let log = Log.find (t, p) logs
-  let llo = fromMaybe 0 (Log.lastOffset log)
-  let newLog = log ++ Log.continueOffset (llo + 1) ms
-  let newLogs = Map.insert (t, p) newLog logs
+  let recvLog = Log.continueOffset (fromMaybe (-1) (Log.lastOffset log) + 1) ms
+  let newLog = log ++ recvLog
 
   indices <- takeMVar is
   let index = Index.find (t, p) indices
@@ -55,7 +54,7 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
         putMVar is syncedIndices
      else do
         putMVar is indices
-
+  let newLogs = Map.insert (t, p) newLog logs
   syncedLogs <- Log.append (t, p) newLogs
   putMVar ls syncedLogs
 
