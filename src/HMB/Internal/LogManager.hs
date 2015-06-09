@@ -11,6 +11,7 @@
 module HMB.Internal.LogManager
   ( new
   , append
+  , readLog
   , State
   ) where
 
@@ -59,4 +60,10 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
   putMVar ls syncedLogs
 
 
-
+readLog :: (L.TopicStr, Int) -> Offset -> IO Log
+readLog tp o = do
+  bo <- Log.getBaseOffset tp (Just o)
+  op <- Index.lookup tp bo o
+  --print op
+  log <- Log.lookup tp bo op o
+  return log

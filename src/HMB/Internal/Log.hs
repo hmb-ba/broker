@@ -12,14 +12,14 @@
 -- it.
 
 module HMB.Internal.Log
-  ( readLog
-  , getTopicNames
+  ( getTopicNames
 
   , new
   , find
   , size
   , sizeRange
   , append
+  , lookup
   , getTopics
   , lastOffset
   , continueOffset
@@ -30,7 +30,8 @@ module HMB.Internal.Log
 import Kafka.Protocol
 import qualified HMB.Internal.LogConfig as L
 
-import Data.List hiding (find)
+import Prelude hiding (lookup)
+import Data.List hiding (find, lookup)
 import qualified Data.Map.Lazy as Map
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Get
@@ -127,9 +128,6 @@ isDirectory x = x `elem` [".", ".."]
 filterRootDir :: [String] -> [String]
 filterRootDir = filter (\x -> not $ isDirectory x)
 
-getLogFolder :: (L.TopicStr, Int) -> String
-getLogFolder (t, p) = "log/" ++ t ++ "_" ++ show p
-
 maxOffset' :: [Int] -> Int
 maxOffset' [] = 0
 maxOffset' [x] = x
@@ -142,7 +140,7 @@ nextSmaller xs x = last $ filter (<(fromIntegral x)) $ sort xs
 
 getBaseOffsets :: (L.TopicStr, Int) -> IO [BaseOffset]
 getBaseOffsets (t, p) = do
-  dirs <- getDirectoryContents $ getLogFolder (t, p)
+  dirs <- getDirectoryContents $ L.logFolder t p
   return $ map (offsetFromFileName) (filter (isLogFile) (filterRootDir dirs))
 
 -- | Returns the base offset for a tuple of topic and partition,
@@ -177,22 +175,6 @@ continueOffset o (m:ms) = assignOffset o m : continueOffset (o + 1) ms
 -------------------------------------------------------
 -- Read
 -------------------------------------------------------
--- decode as long as physical position != 0 which means last index has passed
-decodeIndexEntry :: Get [OffsetPosition]
-decodeIndexEntry = do
-  empty <- isEmpty
-  if empty
-    then return []
-    else do rel  <- getWord32be
-            phys <- getWord32be
-            case phys of
-              0 -> return $ (rel, phys)  : []
-              _ -> do
-                    e <- decodeIndexEntry
-                    return $ (rel, phys) : e
-
-decodeIndex :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, [OffsetPosition])
-decodeIndex = runGetOrFail decodeIndexEntry
 
 getLog :: Get Log
 getLog = do
@@ -207,65 +189,7 @@ getLog = do
 getFileSize :: String -> IO Integer
 getFileSize path = do
   size <- withFile path ReadMode (\hdl -> hFileSize hdl)
---  hdl <- openFile path ReadMode
---  size <- hFileSize hdl
---  print size
   return size
-
-
-readLog :: (L.TopicStr, Int) -> Offset -> IO Log
-readLog tp o = do
-  bos <- getBaseOffsets tp
-  let bo = getBaseOffsetFor bos o
-  op <- indexLookup tp bo o
-  --print op
-  log <- getLogFrom tp bo op
-  return $ filterMessageSetsFor log o
-
-indexLookup :: (L.TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition
----locate the offset/location pair for the greatest offset less than or equal
--- to the target offset.
-indexLookup (t, p) bo to = do
-  let path = L.getPath (getLogFolder (t, p)) (L.indexFile bo)
-  bs <- mmapFileByteStringLazy path Nothing
-  case decodeIndex bs of
-    Left (bs, byo, e)   -> do
-        print e
-        return $ (0,0) --todo: error handling
-    Right (bs, byo, ops) -> do
-      --print ops
-      return $ getOffsetPositionFor ops bo to
-
-getOffsetPositionFor :: [OffsetPosition] -> BaseOffset -> Offset -> OffsetPosition
--- get greatest offsetPosition from list that is less than or equal target offset
-getOffsetPositionFor [] bo to = (0, 0)
-getOffsetPositionFor [x] bo to = x
-getOffsetPositionFor (x:xs) bo to
-       | targetOffset <= absoluteIndexOffset = (0,0)
-       | absoluteIndexOffset <= targetOffset && targetOffset < nextAbsoluteIndexOffset = x
-       | otherwise = getOffsetPositionFor xs bo to
-  where  nextAbsoluteIndexOffset = ((fromIntegral $ fst $ head $ xs) + bo)
-         absoluteIndexOffset = (fromIntegral $ fst $ x) + bo
-         targetOffset = fromIntegral $ to
-
-getBaseOffsetFor :: [BaseOffset] -> Offset -> BaseOffset
--- get greatest baseOffset from list that is less than or equal target offset
-getBaseOffsetFor [] to = 0
-getBaseOffsetFor [x] to = x
-getBaseOffsetFor (x:xs) to = if (x <= fromIntegral to && fromIntegral to < head xs) then x else getBaseOffsetFor xs to
-
--- searchLogFor
--- Search forward the log file  for the position of the last offset that is greater than or equal to the target offset
--- and return its physical position
-
-getLogFrom :: (L.TopicStr, Int) -> BaseOffset -> OffsetPosition -> IO Log
--- ParseLog starting from given physical Position.
-getLogFrom (t, p) bo (_, phy) = do
-  let path = L.getPath (L.logFolder t p) (L.logFile bo)
-  fs <- getFileSize path
-  --print phy
-  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
-  return $ runGet decodeLog bs
 
 decodeLog :: Get Log
 decodeLog = do
@@ -278,6 +202,16 @@ decodeLog = do
 
 filterMessageSetsFor :: Log -> Offset -> Log
 filterMessageSetsFor ms to = filter (\x -> msOffset x >= fromIntegral to) ms
+
+lookup :: (L.TopicStr, Int) -> BaseOffset -> OffsetPosition -> Offset -> IO Log
+lookup (t, p) bo (_, phy) o = do
+  let path = L.getPath (L.logFolder t p) (L.logFile bo)
+  fs <- getFileSize path
+  --print phy
+  bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
+  let log = runGet decodeLog bs
+  return $ filterMessageSetsFor log o
+
 
 ---------------------------------
 --TopicNames for Metadata Request

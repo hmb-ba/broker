@@ -140,7 +140,7 @@ packProduceResponse rm = ResponseMessage resLen (rqCorrelationId rm) response
 
 packPartitionsToFtRsPayload :: TopicName -> Partition -> IO RsPayload
 packPartitionsToFtRsPayload t p = do
-    log <- Log.readLog (BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
+    log <- LogManager.readLog (BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
     return $ RsFtPayload
         0
         0
