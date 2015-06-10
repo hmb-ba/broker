@@ -200,8 +200,8 @@ decodeLog = do
               mss <- decodeLog
               return $ ms : mss
 
-filterMessageSetsFor :: Log -> Offset -> Log
-filterMessageSetsFor ms to = filter (\x -> msOffset x >= fromIntegral to) ms
+filterByOffset :: Offset -> Log -> Log
+filterByOffset to = filter (\x -> msOffset x >= fromIntegral to)
 
 lookup :: (L.TopicStr, Int) -> BaseOffset -> OffsetPosition -> Offset -> IO Log
 lookup (t, p) bo (_, phy) o = do
@@ -210,7 +210,7 @@ lookup (t, p) bo (_, phy) o = do
   --print phy
   bs <- mmapFileByteStringLazy path $ Just (fromIntegral phy, (fromIntegral (fs) - fromIntegral phy))
   let log = runGet decodeLog bs
-  return $ filterMessageSetsFor log o
+  return $ filterByOffset o log
 
 
 ---------------------------------
