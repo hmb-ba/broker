@@ -59,10 +59,13 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
   putMVar ls syncedLogs
 
 
-readLog :: (L.TopicStr, L.PartitionNr) -> Offset -> IO Log
-readLog tp o = do
-  bo <- Log.getBaseOffset tp (Just o)
-  op <- Index.lookup tp bo o
+readLog :: (Index.IndexState, L.TopicStr, L.PartitionNr) -> Offset -> IO Log
+readLog (Index.IndexState is, t, p) o = do
+  bo <- Log.getBaseOffset (t, p) (Just o)
+  indices <- takeMVar is
+  let index = Index.find (t, p) indices
+  op <- Index.lookup index bo o
+  putMVar is indices
   --print op
-  log <- Log.lookup tp bo op o
+  log <- Log.lookup (t, p) bo op o
   return log

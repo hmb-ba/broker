@@ -96,7 +96,7 @@ handleRequest :: RequestMessage -> LogManager.State -> IO (Either HandleError BL
 handleRequest rm s = do
    handle <- case rqApiKey rm of
     0  -> handleProduceRequest (rm) s
-    1  -> handleFetchRequest (rqRequest rm)
+    1  -> handleFetchRequest (rqRequest rm) s
     --2  -> Right $ putStrLn "OffsetRequest"
     3  -> handleMetadataRequest (rm)
     --8  -> Right $ putStrLn "OffsetCommitRequest"
@@ -138,9 +138,9 @@ packProduceResponse rm = ResponseMessage resLen (rqCorrelationId rm) response
 -- Handle FetchRequest
 -----------------
 
-packPartitionsToFtRsPayload :: TopicName -> Partition -> IO RsPayload
-packPartitionsToFtRsPayload t p = do
-    log <- LogManager.readLog (BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
+packPartitionsToFtRsPayload :: Index.IndexState -> TopicName -> Partition -> IO RsPayload
+packPartitionsToFtRsPayload is t p = do
+    log <- LogManager.readLog (is, BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
     return $ RsFtPayload
         0
         0
@@ -148,18 +148,18 @@ packPartitionsToFtRsPayload t p = do
         (fromIntegral $ BL.length $ foldl (\acc ms -> BL.append acc (runPut $ buildMessageSet ms)) BL.empty log)
         log
 
-packLogToFtRs :: RqTopic -> IO Response
-packLogToFtRs t = do
-    rss <- (mapM (packPartitionsToFtRsPayload $ rqToName $ t) $ rqToPartitions t)
+packLogToFtRs :: Index.IndexState -> RqTopic -> IO Response
+packLogToFtRs is t = do
+    rss <- (mapM (packPartitionsToFtRsPayload is (rqToName t)) $ rqToPartitions t)
     return $ FetchResponse 1 [(RsTopic
         (rqToNameLen t)
         (rqToName t )
         (rqToNumPartitions t )
         rss)]
 
-handleFetchRequest :: Request -> IO (Either HandleError BL.ByteString)
-handleFetchRequest req = do
-  w <- tryIOError(liftM (ResponseMessage 0 0) $ packLogToFtRs (head $ rqFtTopics req))
+handleFetchRequest :: Request -> LogManager.State -> IO (Either HandleError BL.ByteString)
+handleFetchRequest req (ls, is) = do
+  w <- tryIOError(liftM (ResponseMessage 0 0) $ packLogToFtRs is (head $ rqFtTopics req))
   case w of
     Left e -> return $ Left $ FtReadLogError 0 $ show e
     Right rsms -> return $ Right $ runPut $ buildFtRsMessage rsms

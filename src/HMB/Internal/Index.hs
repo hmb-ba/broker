@@ -105,19 +105,29 @@ lastOrNull xs = last xs
 --    Left (bs, bo, e) -> (0,0)
 --    Right (bs, bo, ops) -> lastIndex ops
 
-lookup :: (L.TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition
+lookup' :: (L.TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition
 ---locate the offset/location pair for the greatest offset less than or equal
 -- to the target offset.
-lookup (t, p) bo to = do
+lookup' (t, p) bo to = do
   let path = L.getPath (L.logFolder t p) (L.indexFile bo)
   bs <- mmapFileByteStringLazy path Nothing
   case decode bs of
-    Left (bs, byo, e)   -> do
-        print e
-        return $ (0,0) --todo: error handling
-    Right (bs, byo, ops) -> do
-      --print ops
-      return $ getOffsetPositionFor ops bo to
+    Left (bs, byo, e) -> return (0,0)
+    Right (bs, byo, ops) -> return $ getOffsetPositionFor ops bo to
+
+
+findOrNextSmaller :: Offset -> [OffsetPosition] -> OffsetPosition
+findOrNextSmaller rel ops
+    | null ops = (0,0)
+    | otherwise = case (filter ((< fromIntegral(rel)).fst) $ sort ops) of
+                  [] -> (0,0)
+                  [x] -> x
+                  xs -> last xs
+
+lookup :: [OffsetPosition] -> BaseOffset -> Offset -> IO OffsetPosition
+lookup index bo o = do
+  let relOffset = o - fromIntegral(bo)
+  return (findOrNextSmaller relOffset index)
 
 -- decode as long as physical position != 0 which means last index has passed
 decodeEntry :: Get [OffsetPosition]
