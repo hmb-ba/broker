@@ -6,7 +6,9 @@
 -- Maintainer  :
 -- Stability   : WIP
 -- Portability : GHC
---
+-- 
+-- This module acts as an inteface to any component that uses functionalities of
+-- the log. 
 
 module HMB.Internal.LogManager
   ( new
@@ -15,18 +17,21 @@ module HMB.Internal.LogManager
   , State
   ) where
 
-import Kafka.Protocol
-import qualified HMB.Internal.Log as Log
-import qualified HMB.Internal.Index as Index
-import qualified HMB.Internal.LogConfig as L
-
 import Control.Concurrent.MVar
 
 import Data.Maybe
 import qualified Data.Map.Lazy as Map
 
+import qualified HMB.Internal.Log as Log
+import qualified HMB.Internal.Index as Index
+import qualified HMB.Internal.LogConfig as L
+
+import Kafka.Protocol
+
+
 type State = (Log.LogState, Index.IndexState)
 
+-- | Initialize new Log and Index state
 new :: IO (Log.LogState, Index.IndexState)
 new = do
   ls <- Log.new
@@ -36,7 +41,6 @@ new = do
 -- | Appends a Log (set of MessageSet) to memory and eventually writes to disk.
 append :: (State, L.TopicStr, L.PartitionNr, Log) -> IO ()
 append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
-  --Log.append (ls, t, p, ms)
   logs <- takeMVar ls
   let log = Log.find (t, p) logs
   let recvLog = Log.continueOffset (fromMaybe (-1) (Log.lastOffset log) + 1) ms
@@ -50,7 +54,6 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
   if Index.isInterval (Log.sizeRange (Just lastIndexedOffset) Nothing newLog)
      then do
         syncedIndices <- Index.append indices (t, p) newLog (Log.size newLog)
-        --putStrLn $ "Index created, now: "-- ++ show syncedIndices
         putMVar is syncedIndices
      else do
         putMVar is indices
@@ -58,7 +61,7 @@ append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
   syncedLogs <- Log.append (t, p) newLogs
   putMVar ls syncedLogs
 
-
+-- | Reads as set of MessageSes from log (directly from disk)
 readLog :: (Index.IndexState, L.TopicStr, L.PartitionNr) -> Offset -> IO Log
 readLog (Index.IndexState is, t, p) o = do
   bo <- Log.getBaseOffset (t, p) (Just o)
@@ -66,6 +69,5 @@ readLog (Index.IndexState is, t, p) o = do
   let index = Index.find (t, p) indices
   op <- Index.lookup index bo o
   putMVar is indices
-  --print op
   log <- Log.lookup (t, p) bo op o
   return log

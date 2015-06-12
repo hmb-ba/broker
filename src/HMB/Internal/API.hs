@@ -3,7 +3,7 @@
 -- Copyright   : (c) Marc Juchli, Lorenz Wolf 2015
 -- License     : BSD-style
 --
--- Maintainer  :
+-- Maintainer  : 
 -- Stability   : WIP
 -- Portability : GHC
 --
@@ -13,12 +13,8 @@
 -- according ResponseMessage is generated and provided to the Network Layer
 -- for sending back to the client.
 --
--- -- > import ...
---
 module HMB.Internal.API
-( handleRequest
-, runApiHandler
-) where
+( runApiHandler ) where
 
 
 import Control.Exception
@@ -48,11 +44,7 @@ import Prelude hiding (catch)
 import System.IO.Error
 
 
--------------------------------
---API Handler Thread
-------------------------------
--- | Api handler
---
+-- | Run API handler loop
 runApiHandler :: RequestChan -> ResponseChan -> IO()
 runApiHandler rqChan rsChan = do
   s <- LogManager.new
@@ -79,19 +71,17 @@ writeToResChan conn chan res = writeChan chan (conn, res)
 handleHandlerError :: (Socket, SockAddr) -> HandleError -> IO()
 handleHandlerError (s, a) (ParseRequestError e) = do
     putStrLn $ (show "[ParseError]: ") ++ e
-    --sClose s
-    putStrLn $ "***Host " ++ (show a) ++ " disconnected ***"
 handleHandlerError (s, a) (PrWriteLogError o e) = do
     putStrLn $ show "[WriteLogError on offset " ++ show o ++ "]: " ++ show e
 handleHandlerError (s, a) UnknownRqError = do
     putStrLn $ show "[UnknownRqError]"
 handleHandlerError (s, a) e = do
   putStrLn $ show e
-  S.sendAll s $ C.pack $ show e -- TODO: Send BS to Response Channel
+  S.sendAll s $ C.pack $ show e
   sClose s
   putStrLn $ "***Host " ++ (show a) ++ "disconnected ***"
 
-
+-- | Handle RequestMessage
 handleRequest :: RequestMessage -> LogManager.State -> IO (Either HandleError BL.ByteString)
 handleRequest rm s = do
    handle <- case rqApiKey rm of
@@ -105,12 +95,9 @@ handleRequest rm s = do
     _  -> return $ Left UnknownRqError
    return handle
 
------------------
--- Handle ProduceRequest
------------------
+-- | Handle ProduceRequest
 handleProduceRequest :: RequestMessage -> LogManager.State -> IO (Either HandleError BL.ByteString)
 handleProduceRequest rm s = do
-  --mapM Log.appendLog (Log.logData req)
   let req = rqRequest rm
 
   w <- tryIOError( mapM LogManager.append [
@@ -134,29 +121,8 @@ packProduceResponse rm = ResponseMessage resLen (rqCorrelationId rm) response
                       [error]
     error = RsPrPayload 0 0 0
 
------------------
--- Handle FetchRequest
------------------
 
-packPartitionsToFtRsPayload :: Index.IndexState -> TopicName -> Partition -> IO RsPayload
-packPartitionsToFtRsPayload is t p = do
-    log <- LogManager.readLog (is, BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
-    return $ RsFtPayload
-        0
-        0
-        0
-        (fromIntegral $ BL.length $ foldl (\acc ms -> BL.append acc (runPut $ buildMessageSet ms)) BL.empty log)
-        log
-
-packLogToFtRs :: Index.IndexState -> RqTopic -> IO Response
-packLogToFtRs is t = do
-    rss <- (mapM (packPartitionsToFtRsPayload is (rqToName t)) $ rqToPartitions t)
-    return $ FetchResponse 1 [(RsTopic
-        (rqToNameLen t)
-        (rqToName t )
-        (rqToNumPartitions t )
-        rss)]
-
+-- | Handle FetchRequest
 handleFetchRequest :: Request -> LogManager.State -> IO (Either HandleError BL.ByteString)
 handleFetchRequest req (ls, is) = do
   w <- tryIOError(liftM (ResponseMessage 0 0) $ packLogToFtRs is (head $ rqFtTopics req))
@@ -164,10 +130,30 @@ handleFetchRequest req (ls, is) = do
     Left e -> return $ Left $ FtReadLogError 0 $ show e
     Right rsms -> return $ Right $ runPut $ buildFtRsMessage rsms
 
+packPartitionsToFtRsPayload :: Index.IndexState -> TopicName -> Partition -> IO RsPayload
+packPartitionsToFtRsPayload is t p = do
+    log <- LogManager.readLog (is, BC.unpack $ t, fromIntegral $ rqFtPartitionNumber p) $ fromIntegral $ rqFtFetchOffset p
+    return $ (RsFtPayload
+              0
+              0
+              0
+              (fromIntegral $ BL.length $ runPut $ buildMessageSets log)
+              log)
 
------------------
--- Handle MetadataRequest
------------------
+packLogToFtRs :: Index.IndexState -> RqTopic -> IO Response
+packLogToFtRs is t = do
+    rss <- (mapM (packPartitionsToFtRsPayload is (rqToName t)) $ rqToPartitions t)
+    return $ FetchResponse 1 [(RsTopic
+                              (rqToNameLen t)
+                              (rqToName t )
+                              (rqToNumPartitions t )
+                              rss)]
+
+-- | Handle MetadataRequest
+handleMetadataRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
+handleMetadataRequest rm = do
+  res <- packMdRs
+  return $ Right $ runPut $ buildMdRsMessage $ ResponseMessage (fromIntegral(BL.length $ runPut $ buildMdRs res) + 4) (rqCorrelationId rm) res
 
 packMdRsPartitionMetadata :: RsMdPartitionMetadata
 packMdRsPartitionMetadata = RsMdPartitionMetadata 0 0 0 1 [0] 1 [0]
@@ -182,7 +168,7 @@ packMdRs = do
   (NetworkInterface name ipv4 ipv6 mac) <- getHostIp
   return $ MetadataResponse
             1
-            ([RsMdPayloadBroker 0 (fromIntegral $ BL.length $ C.pack $ show ipv4) (BC.pack $ show ipv4) 4343]) --single broker solution
+            ([RsMdPayloadBroker 0 (fromIntegral $ BL.length $ C.pack $ show ipv4) (BC.pack $ show ipv4) 4343])  
             (fromIntegral $ length tss)
             tss
 
@@ -190,11 +176,4 @@ getHostIp :: IO NetworkInterface
 getHostIp = do
   ns <- getNetworkInterfaces
   return $ head $ filter (\(NetworkInterface name ipv4 ipv6 mac) -> name == "eth0") ns
-
-
-handleMetadataRequest :: RequestMessage -> IO (Either HandleError BL.ByteString)
-handleMetadataRequest rm = do
-  res <- packMdRs
-  return $ Right $ runPut $ buildMdRsMessage $ ResponseMessage (fromIntegral(BL.length $ runPut $ buildMdRs res) + 4) (rqCorrelationId rm) res
-
 

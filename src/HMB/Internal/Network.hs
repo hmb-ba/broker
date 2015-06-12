@@ -11,9 +11,6 @@
 -- connections and receive bytes from client. It chunks the received bytes
 -- into single requests and provide it to the API Layer.
 --
--- > import Network.Socket
--- > import Network.Socket.ByteString.Lazy
---
 module HMB.Internal.Network
 (
   initSock,
@@ -23,49 +20,39 @@ module HMB.Internal.Network
   runResponder
 ) where
 
-import HMB.Internal.Types
-
-import Data.Int
-import Data.Binary.Get
-
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.Chan
 import Control.Exception
 
+import Data.Int
+import Data.Binary.Get
 import qualified Data.ByteString.Lazy as B
+
+import HMB.Internal.Types
 
 import Network.Socket
 import qualified Network.Socket.ByteString.Lazy as S
 
---------------------------
---Initialize Socket
----------------------------
+-- | Initialize Socket
 initSock :: IO Socket
 initSock = do
   sock <- socket AF_INET Stream 0
   setSocketOption sock ReuseAddr 1
-  --setSocketOption sock SendBuffer 131072
   setSocketOption sock KeepAlive 1
   bindSocket sock (SockAddrInet 4343 iNADDR_ANY)
   listen sock 2
   return sock
 
---------------------------
--- Initialize Request Channel
----------------------------
+-- | Initialize Request Channel
 initRqChan :: IO RequestChan
 initRqChan = newChan
 
---------------------------
--- Initialize Response Channel
----------------------------
+-- | Initialize Response Channel
 initRsChan :: IO ResponseChan
 initRsChan = newChan
 
------------------------------
--- Acceptor Thread
-----------------------------
+-- | Acceptor Thread
 runAcceptor :: Socket -> RequestChan -> IO ()
 runAcceptor sock chan =  do
   (conSock, sockAddr) <- accept sock
@@ -73,9 +60,7 @@ runAcceptor sock chan =  do
   forkIO $ runConnection (conSock, sockAddr) chan True
   runAcceptor sock chan
 
------------------------------
---Connection Processor Thread
-----------------------------
+-- | Connection Processor Thread
 runConnection :: (Socket, SockAddr) -> RequestChan -> Bool -> IO ()
 runConnection conn chan True = do
   r <- recvFromSock conn
@@ -86,7 +71,7 @@ runConnection conn chan True = do
     Right input -> do
       writeToReqChan conn chan input
       runConnection conn chan True
-runConnection conn chan False = return () --TODO: Better solution for breaking out the loop?
+runConnection conn chan False = return ()
 
 recvFromSock :: (Socket, SockAddr) -> IO (Either SocketError B.ByteString)
 recvFromSock (sock, sockaddr) =  do
@@ -103,12 +88,12 @@ recvFromSock (sock, sockaddr) =  do
       case parsedLength of
         Left (b, bo, e) -> return $ Left $ SocketRecvError $ show e
         Right (b, bo, l) ->  do
-          req <- recvExactly sock l  -- TODO: Socket Error handling :: IO (Either SomeException BS.ByteString)
+          req <- recvExactly sock l
           return $! Right (B.append rl req)
    where
       getLength = runGetOrFail $ fromIntegral <$> getWord32be
 
--- Because Socket.Recv: may return fewer bytes than specified
+-- | Because Socket.Recv: may return fewer bytes than specified
 recvExactly :: Socket -> Int64 -> IO B.ByteString
 recvExactly sock size = B.concat . reverse <$> loop [] 0
   where
@@ -120,24 +105,20 @@ recvExactly sock size = B.concat . reverse <$> loop [] 0
               then return chunks
               else loop (chunk:chunks) $! bytesRead + B.length chunk
 
--- FIXME (meiersi): why so skimpy on spaces? 'IO()' is NOT idiomatic Haskell ;-)
-writeToReqChan :: (Socket, SockAddr) -> RequestChan -> B.ByteString -> IO()
+writeToReqChan :: (Socket, SockAddr) -> RequestChan -> B.ByteString -> IO ()
 writeToReqChan conn chan req = writeChan chan (conn, req)
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
 handleSocketError (sock, sockaddr) (SocketRecvError e) = putStrLn $ "[Socket Receive Error] " ++ e
 handleSocketError (sock, sockaddr) (SocketSendError e) = putStrLn $ "[Socket Send Error] " ++ e
-  --sClose sock
 
------------------------
--- Response Processor Thread
------------------------
+-- | Response Processor Thread
 runResponder :: ResponseChan -> IO()
 runResponder chan = do
   (conn, res) <- readChan chan
   res <- sendResponse conn res
   case res of
-    Left e -> handleSocketError conn $ SocketSendError $ show e ---TODO: What to do with responses when client disconnected?
+    Left e -> handleSocketError conn $ SocketSendError $ show e
     Right io -> return io
   runResponder chan
 

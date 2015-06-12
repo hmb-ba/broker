@@ -13,7 +13,6 @@
 
 module HMB.Internal.Log
   ( getTopicNames
-
   , new
   , find
   , size
@@ -27,10 +26,8 @@ module HMB.Internal.Log
   , LogState(..)
   ) where
 
-import Kafka.Protocol
-import qualified HMB.Internal.LogConfig as L
+import Control.Concurrent.MVar
 
-import Prelude hiding (lookup)
 import Data.List hiding (find, lookup)
 import qualified Data.Map.Lazy as Map
 import qualified Data.ByteString.Lazy as BL
@@ -40,11 +37,16 @@ import Data.Maybe
 import Data.Word
 import Data.Int
 
+import qualified HMB.Internal.LogConfig as L
+
+import Kafka.Protocol
+
+import Prelude hiding (lookup)
+
 import System.Directory
 import System.IO.MMap
 import System.IO
 
-import Control.Concurrent.MVar
 
 
 ----------------------------------------------------------
@@ -96,7 +98,6 @@ append :: (L.TopicStr, L.PartitionNr) -> Logs -> IO Logs
 append (t, p) logs = do
   let log = find (t, p) logs
   let logToSync = if (msOffset $ head log) == 0 then log else tail log
-  --putStrLn $ "size of log: " ++ show (length logToSync)
   if isFlushInterval logToSync
       then do
           write (t, p, logToSync)
@@ -108,13 +109,11 @@ append (t, p) logs = do
 write :: (L.TopicStr, Int, Log) -> IO ()
 write (t, p, ms) = do
   let bo = 0 -- PERFORMANCE
-  --bo <- getBaseOffset (t, p) Nothing -- todo: directory state
+  --bo <- getBaseOffset (t, p) Nothing -- TODO: directory state
   let logPath = L.getPath (L.logFolder t p) (L.logFile bo)
   let bs = runPut $ buildMessageSets ms
   withFile logPath AppendMode $ \hdl -> BL.hPut hdl bs
 
-
-----------------------------------------------------------
 
 offsetFromFileName :: String -> Int
 offsetFromFileName = read . reverse . snd . splitAt 4 . reverse
@@ -155,8 +154,6 @@ getBaseOffset (t, p) o = do
       Nothing -> return $ maxOffset' bos
       Just o -> return $ nextSmaller bos o
 
-
--------------------------------------------------------
 
 lastOffset :: Log -> Maybe Offset
 lastOffset [] = Nothing
@@ -213,9 +210,7 @@ lookup (t, p) bo (_, phy) o = do
   return $ filterByOffset o log
 
 
----------------------------------
---TopicNames for Metadata Request
--------------------------------
+-- | TopicNames for Metadata Request
 getTopicNames :: IO [String]
 getTopicNames = do
   dirs <- (getDirectoryContents "log/")

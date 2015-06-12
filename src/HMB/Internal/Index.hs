@@ -7,7 +7,7 @@
 -- Stability   : WIP
 -- Portability : GHC
 --
--- This module encapsulates Index functionality.
+-- This module encapsulates functionality regadring the index file.
 
 module HMB.Internal.Index
   ( new
@@ -19,10 +19,8 @@ module HMB.Internal.Index
   , IndexState(..)
   ) where
 
-import Kafka.Protocol
-import qualified HMB.Internal.LogConfig as L
+import Control.Concurrent.MVar
 
-import Prelude hiding (lookup)
 import Data.Word
 import Data.List hiding (find, lookup)
 import qualified Data.Map.Lazy as Map
@@ -31,11 +29,16 @@ import Data.Int
 import Data.Binary.Get
 import qualified Data.ByteString.Lazy as BL
 
-import Text.Printf
-import Control.Concurrent.MVar
-import System.IO
+import qualified HMB.Internal.LogConfig as L
 
+import Kafka.Protocol
+
+import Prelude hiding (lookup)
+
+import System.IO
 import System.IO.MMap
+
+import Text.Printf
 
 type OffsetPosition = (RelativeOffset, FileOffset)
 type RelativeOffset = Word32
@@ -60,14 +63,13 @@ append indices (t, p) ms logSize = do
   let bo = 0 -- PERFORMANCE
   let path = L.getPath (L.logFolder t p) (L.indexFile bo)
   fs <- getFileSize path
-  let new = pack (fromIntegral (msOffset (last ms)) - bo, fs + (fromIntegral logSize)) -- filesize needs size of encoded ms too
+  let new = pack (fromIntegral (msOffset (last ms)) - bo, fs + (fromIntegral logSize))
   let newIndex = old ++ [new]
   return $ Map.insert (t, p) newIndex indices
   -- TODO: write to disk
 
 -- | Find a list of OffsetPosition within the map of Indices. If nothing is
 -- found, return an empty List
--- TODO: make generic
 find :: (L.TopicStr, L.PartitionNr) -> Indices -> [OffsetPosition]
 find (t, p) indices = fromMaybe [] (Map.lookup (t, p) indices)
 
@@ -87,34 +89,10 @@ getFileSize path = withFile path ReadMode (\hdl -> hFileSize hdl)
 pack :: (Int, Integer) -> OffsetPosition
 pack (o, fs) = (fromIntegral o, fromIntegral fs)
 
+-- | Gives last index entry, if no index entry exists give (0,0)
 lastOrNull :: [OffsetPosition] -> OffsetPosition
 lastOrNull [] = (0,0)
 lastOrNull xs = last xs
-
---buildOffsetPosition :: OffsetPosition -> Put
---buildOffsetPosition (o, p) = do
---    putWord32be o
---    putWord32be p
---
---encodeIndex = runPutOrFail buildOffsetPosition
---
---
---getLastOffsetPosition' :: BL.ByteString -> OffsetPosition
---getLastOffsetPosition' bs =
---  case decode bs of
---    Left (bs, bo, e) -> (0,0)
---    Right (bs, bo, ops) -> lastIndex ops
-
-lookup' :: (L.TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition
----locate the offset/location pair for the greatest offset less than or equal
--- to the target offset.
-lookup' (t, p) bo to = do
-  let path = L.getPath (L.logFolder t p) (L.indexFile bo)
-  bs <- mmapFileByteStringLazy path Nothing
-  case decode bs of
-    Left (bs, byo, e) -> return (0,0)
-    Right (bs, byo, ops) -> return $ getOffsetPositionFor ops bo to
-
 
 findOrNextSmaller :: Offset -> [OffsetPosition] -> OffsetPosition
 findOrNextSmaller rel ops
@@ -123,13 +101,24 @@ findOrNextSmaller rel ops
                   [] -> (0,0)
                   [x] -> x
                   xs -> last xs
-
+-- | Locate the offset/location pair for the greatest offset less than or equal
+--to the target offset
 lookup :: [OffsetPosition] -> BaseOffset -> Offset -> IO OffsetPosition
 lookup index bo o = do
   let relOffset = o - fromIntegral(bo)
   return (findOrNextSmaller relOffset index)
 
--- decode as long as physical position != 0 which means last index has passed
+-- | Index lookup from disk
+lookup' :: (L.TopicStr, Int) -> BaseOffset -> Offset -> IO OffsetPosition
+lookup' (t, p) bo to = do
+  let path = L.getPath (L.logFolder t p) (L.indexFile bo)
+  bs <- mmapFileByteStringLazy path Nothing
+  case decode bs of
+    Left (bs, byo, e) -> return (0,0)
+    Right (bs, byo, ops) -> return $ getOffsetPositionFor ops bo to
+
+
+-- | Decode as long as physical position != 0 which means last index has passed
 decodeEntry :: Get [OffsetPosition]
 decodeEntry = do
   empty <- isEmpty
@@ -146,9 +135,8 @@ decodeEntry = do
 decode :: BL.ByteString -> Either (BL.ByteString, ByteOffset, String) (BL.ByteString, ByteOffset, [OffsetPosition])
 decode = runGetOrFail decodeEntry
 
-
+-- | Get greatest offsetPosition from list that is less than or equal target offset
 getOffsetPositionFor :: [OffsetPosition] -> BaseOffset -> Offset -> OffsetPosition
--- get greatest offsetPosition from list that is less than or equal target offset
 getOffsetPositionFor [] bo to = (0, 0)
 getOffsetPositionFor [x] bo to = x
 getOffsetPositionFor (x:xs) bo to
