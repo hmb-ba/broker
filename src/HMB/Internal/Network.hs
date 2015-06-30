@@ -109,6 +109,10 @@ writeToReqChan :: (Socket, SockAddr) -> RequestChan -> B.ByteString -> IO ()
 writeToReqChan conn chan req = writeChan chan (conn, req)
 
 handleSocketError :: (Socket, SockAddr) -> SocketError -> IO()
+-- FIXME (SM): 'putStrLn' is unsuitable for logging in a threaded application,
+-- as the log messages from different threads will be interleaved at
+-- *arbitrary* characters. Implement and use a Logger whose handle you pass to
+-- every location that requires logging.
 handleSocketError (sock, sockaddr) (SocketRecvError e) = putStrLn $ "[Socket Receive Error] " ++ e
 handleSocketError (sock, sockaddr) (SocketSendError e) = putStrLn $ "[Socket Send Error] " ++ e
 

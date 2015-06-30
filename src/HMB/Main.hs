@@ -27,6 +27,11 @@ main = do
   rqChan <- initRqChan
   rsChan <- initRsChan
 
+  -- FIXME (SM): this and other modules contain trailing whitespace. It is
+  -- considered good style in the open-source community to not have that. If
+  -- you Google for it you should easily find a command-line invocation to
+  -- drop all trailing whitespace, and editor configurations that highlight it
+  -- and possibly remove it on save.
   withAsync (runAcceptor sock rqChan) $ \a1 -> do 
     putStrLn "***Acceptor Thread started***"
     withAsync (runResponder rsChan) $ \a2 -> do 

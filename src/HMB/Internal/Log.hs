@@ -59,6 +59,15 @@ type FileOffset = Word32
 type BaseOffset = Int
 
 type Logs = Map.Map (L.TopicStr, L.PartitionNr) Log
+
+-- FIXME (SM): I think it should be such that each partition has its own MVar,
+-- as one can easily write and read concurrently to different partitions.
+-- Ideally, you can structure the read-path such that it does not need to take
+-- a lock. For the write case you could also structure the code such that
+-- there is exactly one writer-thread for each partition. In this case, you'd
+-- only need bounded channels for sending messages to these threads. One
+-- should then be able to arrange it such that a message flows through the
+-- system without contention on any lock.
 newtype LogState = LogState (MVar Logs)
 
 getTopics :: IO [String]

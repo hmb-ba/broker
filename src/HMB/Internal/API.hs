@@ -92,6 +92,8 @@ handleRequest rm s = do
     --8  -> Right $ putStrLn "OffsetCommitRequest"
     --9  -> Right $ putStrLn "OffsetFetchRequest"
     --10 -> Right $ putStrLn "ConsumerMetadataRequest"
+    -- FIXME (SM): consider capturing the apiKey, as this will simplify
+    -- debugging in case this kind of error occurs.
     _  -> return $ Left UnknownRqError
    return handle
 
