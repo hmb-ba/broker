@@ -41,6 +41,8 @@ new = do
 -- | Appends a Log (set of MessageSet) to memory and eventually writes to disk.
 append :: (State, L.TopicStr, L.PartitionNr, Log) -> IO ()
 append ((Log.LogState ls, Index.IndexState is), t, p, ms) = do
+  -- FIXME (SM): putMVar is not guaranteed to be called in case of an
+  -- exception. Use 'modifyMVar' to make this code exception-safe.
   logs <- takeMVar ls
   let log = Log.find (t, p) logs
   let recvLog = Log.continueOffset (fromMaybe (-1) (Log.lastOffset log) + 1) ms
